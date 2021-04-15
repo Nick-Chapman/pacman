@@ -21,6 +21,7 @@ dependencies:
 - extra
 - haskeline
 - mtl
+- sdl2
 - split
 - text
 - time
