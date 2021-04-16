@@ -4,6 +4,7 @@ module Top (main) where
 import Control.Concurrent (threadDelay)
 import Control.Monad (ap,liftM)
 import Data.Bits (testBit)
+import Data.List (transpose)
 import Foreign.C.Types (CInt)
 import Rom (Rom)
 import SDL (Renderer,Rectangle(..),V2(..),V4(..),Point(P),($=))
@@ -16,32 +17,47 @@ main :: IO ()
 main = do
   putStrLn "*pacman*"
   m <- initMachine
-  picture <- run m seeColourAndPaletteRoms
+  picture <- run m seeRoms
   display picture
 
 
-seeColourAndPaletteRoms :: Prog Picture
-seeColourAndPaletteRoms = do
-  cols <- sequence [ seeColour ci | ci <- [0..15] ]
-  pals <- sequence [ seePalette pi | pi <- [0..31] ]
-  pure $ Pictures (cols ++ pals)
+seeRoms :: Prog Picture
+seeRoms = do
+  cols <- mapM readColour [0..15]
+  pals <- mapM readPalette [0..31]
+  tiles <- mapM readTile [0..255]
+  somePalette <- readPalette 1
+  pure $ Pictures (
+    [ seeColour i col | (i,col) <- zip [0..] cols ] ++
+    [ seePalette i pal | (i,pal) <- zip [0..] pals ] ++
+    [ seeTile somePalette i tile | (i,tile) <- zip [0..] tiles ]
+    )
 
-seeColour :: ColourIndex -> Prog Picture
-seeColour ci = do
+seeColour :: Int -> RGB -> Picture
+seeColour i rgb = do
   let size = 20
-  rgb <- readColour ci
-  let xy = XY {x = 10 + size * fromIntegral ci, y = 10}
-  pure $ square (size-3) xy rgb
+  let xy = XY {x = 10 + size * i, y = 10}
+  square (size-3) xy rgb
 
-seePalette :: PaletteIndex -> Prog Picture
-seePalette pi = do
+seePalette :: Int -> Palette -> Picture
+seePalette i Palette{p0,p1,p2,p3} = do
   let size = 10
-  Palette{p0,p1,p2,p3} <- readPalette pi
-  pure $ Pictures
+  Pictures
     [ square (size-2) xy rgb
     | (rgb,yoff) <- zip [p0,p1,p2,p3] [30,20,10,0]
-    , let xy = XY {x = 10 + size * fromIntegral pi, y = 50 + yoff}
+    , let xy = XY {x = 10 + size * i, y = 50 + yoff}
     ]
+
+seeTile :: Palette -> Int -> Tile -> Picture
+seeTile palette i (Tile piis) = do
+  -- arrange 256 ties in a 16x16 grid for display
+  let (x0,y0) = (100 + 10 * (i `mod` 16), 100 + 10 * (i `div` 16))
+  let size = 8
+  let xys = [ XY (x+x0) (y+y0) | y <- [0..size-1] , x <- [0..size-1]]
+  Pictures [ Draw xy rgb
+           | (xy,pii) <- zip xys piis
+           , let rgb = resolvePaletteItemIndex palette pii
+           ]
 
 square :: Int -> XY -> RGB -> Picture
 square size XY{x=x0,y=y0} rgb =
@@ -50,6 +66,45 @@ square size XY{x=x0,y=y0} rgb =
            , y <- [0..size-1]
            , let xy = XY (x+x0) (y+y0)
            ]
+
+
+newtype TileIndex = TI Int deriving (Num,Enum,Integral,Real,Ord,Eq)
+
+data Tile = Tile [PaletteItemIndex] -- #64
+
+data PaletteItemIndex = P0 | P1 | P2 | P3
+
+resolvePaletteItemIndex :: Palette -> PaletteItemIndex -> RGB
+resolvePaletteItemIndex Palette{p0,p1,p2,p3} = \case
+  P0 -> p0
+  P1 -> p1
+  P2 -> p2
+  P3 -> p3
+
+makePII :: (Bool,Bool) -> PaletteItemIndex
+makePII = \case
+  (False,False) -> P0
+  (False,True) -> P1
+  (True,False) -> P2
+  (True,True) -> P3
+
+readTile :: TileIndex -> Prog Tile
+readTile (TI i) = do
+  let bytesPerTile = 16
+  let
+    readStrip off = do
+      byte <- ReadTileRom (bytesPerTile*i + off)
+      pure $ decodeTileByte byte
+  bot <- mapM readStrip (reverse [0..7])
+  top <- mapM readStrip (reverse [8..15])
+  let piis = concat (transpose top) ++ concat (transpose bot)
+  pure $ Tile piis
+
+decodeTileByte :: Byte -> [PaletteItemIndex] -- #4
+decodeTileByte (Byte w) = do
+  let pick i = w `testBit` i
+  [ makePII (pick b1, pick b0) | (b1,b0) <- zip [7,6,5,4] [3,2,1,0] ]
+
 
 newtype PaletteIndex = PI Int deriving (Num,Enum,Integral,Real,Ord,Eq)
 
@@ -64,7 +119,7 @@ readPalette (PI i) = do
   pure $ Palette { p0, p1, p2, p3 }
   where
     readItem off = do
-      byte <- ReadPal (4*i + off)
+      byte <- ReadPalRom (4*i + off)
       let ci = fromIntegral byte
       readColour ci
 
@@ -72,7 +127,7 @@ newtype ColourIndex = CI Int deriving (Num,Integral,Real,Enum,Ord,Eq)
 
 readColour :: ColourIndex -> Prog RGB
 readColour (CI i) = do
-  byte <- ReadCol i
+  byte <- ReadColRom i
   pure $ decodeAsRGB byte
 
 decodeAsRGB :: Byte -> RGB
@@ -85,13 +140,13 @@ decodeAsRGB (Byte w) = do
   RGB { r, g, b }
 
 
-
 data Prog a where
   Ret :: a -> Prog a
   Bind :: Prog a -> (a -> Prog b) -> Prog b
   Trace :: String -> Prog ()
-  ReadCol :: Int -> Prog Byte
-  ReadPal :: Int -> Prog Byte
+  ReadColRom :: Int -> Prog Byte
+  ReadPalRom :: Int -> Prog Byte
+  ReadTileRom :: Int -> Prog Byte
 
 instance Functor Prog where fmap = liftM
 instance Applicative Prog where pure = return; (<*>) = ap
@@ -100,23 +155,26 @@ instance Monad Prog where return = Ret; (>>=) = Bind
 data Machine = Machine
   { colRom :: Rom
   , palRom :: Rom
+  , tileRom :: Rom
   }
 
 initMachine :: IO Machine
 initMachine = do
   colRom <- Rom.load 32 "roms/82s123.7f"
   palRom <- Rom.load 256 "roms/82s126.4a"
-  pure $ Machine { colRom, palRom } where
+  tileRom <- Rom.load 4096 "roms/pacman.5e"
+  pure $ Machine { colRom, palRom, tileRom } where
 
 run :: Machine -> Prog a -> IO a
-run Machine{colRom,palRom} p = eval p where
+run Machine{colRom,palRom,tileRom} p = eval p where
   eval :: Prog a -> IO a
   eval = \case
     Ret x -> pure x
     Bind p f -> do a <- eval p; eval (f a)
     Trace s -> print s
-    ReadCol i -> pure $ Rom.lookup colRom i
-    ReadPal i -> pure $ Rom.lookup palRom i
+    ReadColRom i -> pure $ Rom.lookup colRom i
+    ReadPalRom i -> pure $ Rom.lookup palRom i
+    ReadTileRom i -> pure $ Rom.lookup tileRom i
 
 data Picture where
   Draw :: XY -> RGB -> Picture
@@ -130,7 +188,7 @@ display picture = do
   SDL.initializeAll
   let sf = 3
   let screenW = 340
-  let screenH = 200
+  let screenH = 300
   let windowSize = V2 (sf * screenW) (sf * screenH)
   let winConfig = SDL.defaultWindow { SDL.windowInitialSize = windowSize }
   win <- SDL.createWindow (Text.pack "PacMan") $ winConfig
