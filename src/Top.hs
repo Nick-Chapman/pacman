@@ -5,10 +5,12 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (ap,liftM)
 import Data.Bits (testBit)
 import Data.List (transpose)
+import Data.Map (Map)
 import Foreign.C.Types (CInt)
 import Rom (Rom)
 import SDL (Renderer,Rectangle(..),V2(..),V4(..),Point(P),($=))
-import Types (Byte(..))
+import Types (Addr(..),Byte(..))
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text (pack)
 import qualified Rom (load,lookup)
 import qualified SDL
@@ -17,56 +19,49 @@ main :: IO ()
 main = do
   putStrLn "*pacman*"
   m <- initMachine
-  picture <- run m seeRoms
+  picture <- run m seeScreen
   display picture
 
+seeScreen :: Prog Picture
+seeScreen = do
+  drawScreen
+  screen <- GetScreen
+  pure $ pictureScreen screen
 
-seeRoms :: Prog Picture
-seeRoms = do
-  cols <- mapM readColour [0..15]
-  pals <- mapM readPalette [0..31]
-  tiles <- mapM readTile [0..255]
-  somePalette <- readPalette 1
-  pure $ Pictures (
-    [ seeColour i col | (i,col) <- zip [0..] cols ] ++
-    [ seePalette i pal | (i,pal) <- zip [0..] pals ] ++
-    [ seeTile somePalette i tile | (i,tile) <- zip [0..] tiles ]
-    )
+drawScreen :: Prog ()
+drawScreen = do
+  let
+    width = 28
+    height = 32 -- of mid-screen area
+    top =
+      [ (XY{x = 8*(width-1-i), y = 8*0}, 0x3c2 + i) | i <- [0..width-1] ] ++
+      [ (XY{x = 8*(width-1-i), y = 8*1}, 0x3e2 + i) | i <- [0..width-1] ]
+    mid =
+      [ (XY{x = 8*(width-1-i), y = 8*(2+j)}, 0x40 + j + height*i)
+      | i <- [0..width-1], j <- [0..height-1]
+      ]
+    bot =
+      [ (XY{x = 8*(width-1-i), y = 8*34}, 0x02 + i) | i <- [0..width-1] ] ++
+      [ (XY{x = 8*(width-1-i), y = 8*35}, 0x22 + i) | i <- [0..width-1] ]
+  sequence_
+    [ drawTile xy i | (xy,i) <- top ++ mid ++ bot ]
 
-seeColour :: Int -> RGB -> Picture
-seeColour i rgb = do
-  let size = 20
-  let xy = XY {x = 10 + size * i, y = 10}
-  square (size-3) xy rgb
+baseVideoRam :: Addr
+baseVideoRam = 0x4000
 
-seePalette :: Int -> Palette -> Picture
-seePalette i Palette{p0,p1,p2,p3} = do
-  let size = 10
-  Pictures
-    [ square (size-2) xy rgb
-    | (rgb,yoff) <- zip [p0,p1,p2,p3] [30,20,10,0]
-    , let xy = XY {x = 10 + size * i, y = 50 + yoff}
-    ]
-
-seeTile :: Palette -> Int -> Tile -> Picture
-seeTile palette i (Tile piis) = do
-  -- arrange 256 ties in a 16x16 grid for display
-  let (x0,y0) = (100 + 10 * (i `mod` 16), 100 + 10 * (i `div` 16))
-  let size = 8
-  let xys = [ XY (x+x0) (y+y0) | y <- [0..size-1] , x <- [0..size-1]]
-  Pictures [ Draw xy rgb
-           | (xy,pii) <- zip xys piis
-           , let rgb = resolvePaletteItemIndex palette pii
-           ]
-
-square :: Int -> XY -> RGB -> Picture
-square size XY{x=x0,y=y0} rgb =
-  Pictures [ Draw xy rgb
-           | x <- [0..size-1]
-           , y <- [0..size-1]
-           , let xy = XY (x+x0) (y+y0)
-           ]
-
+drawTile :: XY -> Int -> Prog ()
+drawTile xy i = do
+  byteT <- ReadMem (baseVideoRam + fromIntegral i)
+  tile <- readTile (TI (fromIntegral byteT))
+  byteP <- ReadMem (baseVideoRam + 0x400 + fromIntegral i)
+  palette <- readPalette (makePI (fromIntegral byteP))
+  let XY{x=x0,y=y0} = xy
+  let (Tile piis) = tile
+  let xys = [ XY (x+x0) (y+y0) | y <- [0..7] , x <- [0..7]]
+  sequence_ [ SetPixel xy rgb
+            | (xy,pii) <- zip xys piis
+            , let rgb = resolvePaletteItemIndex palette pii
+            ]
 
 newtype TileIndex = TI Int deriving (Num,Enum,Integral,Real,Ord,Eq)
 
@@ -76,10 +71,7 @@ data PaletteItemIndex = P0 | P1 | P2 | P3
 
 resolvePaletteItemIndex :: Palette -> PaletteItemIndex -> RGB
 resolvePaletteItemIndex Palette{p0,p1,p2,p3} = \case
-  P0 -> p0
-  P1 -> p1
-  P2 -> p2
-  P3 -> p3
+  P0 -> p0; P1 -> p1; P2 -> p2; P3 -> p3
 
 makePII :: (Bool,Bool) -> PaletteItemIndex
 makePII = \case
@@ -105,8 +97,10 @@ decodeTileByte (Byte w) = do
   let pick i = w `testBit` i
   [ makePII (pick b1, pick b0) | (b1,b0) <- zip [7,6,5,4] [3,2,1,0] ]
 
-
 newtype PaletteIndex = PI Int deriving (Num,Enum,Integral,Real,Ord,Eq)
+
+makePI :: Int -> PaletteIndex
+makePI i = PI (i `mod` maxPI) where maxPI = 64
 
 data Palette = Palette { p0 :: RGB, p1 :: RGB, p2 :: RGB, p3 :: RGB }
 
@@ -139,7 +133,6 @@ decodeAsRGB (Byte w) = do
     b = bit 6 0x51 + bit 7 0xAE
   RGB { r, g, b }
 
-
 data Prog a where
   Ret :: a -> Prog a
   Bind :: Prog a -> (a -> Prog b) -> Prog b
@@ -147,6 +140,9 @@ data Prog a where
   ReadColRom :: Int -> Prog Byte
   ReadPalRom :: Int -> Prog Byte
   ReadTileRom :: Int -> Prog Byte
+  ReadMem :: Addr -> Prog Byte
+  SetPixel :: XY -> RGB -> Prog ()
+  GetScreen :: Prog Screen
 
 instance Functor Prog where fmap = liftM
 instance Applicative Prog where pure = return; (<*>) = ap
@@ -156,39 +152,72 @@ data Machine = Machine
   { colRom :: Rom
   , palRom :: Rom
   , tileRom :: Rom
+  , mem :: Mem
   }
+
+data Mem = Mem { dump :: Rom }
+
+readMem :: Mem -> Addr -> Byte
+readMem Mem{dump} addr =
+  Rom.lookup dump (fromIntegral (addr - baseVideoRam))
 
 initMachine :: IO Machine
 initMachine = do
   colRom <- Rom.load 32 "roms/82s123.7f"
   palRom <- Rom.load 256 "roms/82s126.4a"
   tileRom <- Rom.load 4096 "roms/pacman.5e"
-  pure $ Machine { colRom, palRom, tileRom } where
+  dump <- Rom.load 2048 "dump"
+  let mem = Mem { dump }
+  pure $ Machine { colRom, palRom, tileRom, mem } where
+
+data Screen = Screen { m :: Map XY RGB }
+
+screen0 :: Screen
+screen0 = Screen { m = Map.empty }
+
+setScreenPixel :: Screen -> XY -> RGB -> Screen
+setScreenPixel Screen{m} xy rgb = Screen { m = Map.insert xy rgb m }
+
+pictureScreen :: Screen -> Picture
+pictureScreen Screen{m} = Pictures [ Draw (shift xy) rgb | (xy,rgb) <- Map.toList m ]
+  where
+    shift XY{x,y} = XY { x = x+8, y = y+8 }
+
+data State = State
+  { screen :: Screen
+  }
+
+state0 :: State
+state0 = State { screen = screen0 }
 
 run :: Machine -> Prog a -> IO a
-run Machine{colRom,palRom,tileRom} p = eval p where
-  eval :: Prog a -> IO a
-  eval = \case
-    Ret x -> pure x
-    Bind p f -> do a <- eval p; eval (f a)
-    Trace s -> print s
-    ReadColRom i -> pure $ Rom.lookup colRom i
-    ReadPalRom i -> pure $ Rom.lookup palRom i
-    ReadTileRom i -> pure $ Rom.lookup tileRom i
+run Machine{colRom,palRom,tileRom,mem} prog0 = eval prog0 state0 (\_ -> pure)
+  where
+  eval :: Prog b -> State -> (State -> b -> IO a) -> IO a
+  eval prog s k = case prog of
+    Ret x -> k s x
+    Bind p f -> eval p s $ \s a -> eval (f a) s k
+    Trace mes -> do print mes; k s ()
+    ReadColRom i -> k s (Rom.lookup colRom i)
+    ReadPalRom i -> k s (Rom.lookup palRom i)
+    ReadTileRom i -> k s (Rom.lookup tileRom i)
+    ReadMem a -> k s (readMem mem a)
+    SetPixel xy rgb -> k s { screen = setScreenPixel (screen s) xy rgb } ()
+    GetScreen -> k s (screen s)
 
 data Picture where
   Draw :: XY -> RGB -> Picture
   Pictures :: [Picture] -> Picture
 
-data XY = XY { x :: Int, y :: Int } deriving Show
+data XY = XY { x :: Int, y :: Int } deriving (Eq,Ord,Show)
 data RGB = RGB { r :: Byte, g :: Byte, b :: Byte } deriving Show
 
 display :: Picture -> IO ()
 display picture = do
   SDL.initializeAll
   let sf = 3
-  let screenW = 340
-  let screenH = 300
+  let screenW = 8 * (28 + 2)
+  let screenH = 8 * (36 + 2)
   let windowSize = V2 (sf * screenW) (sf * screenH)
   let winConfig = SDL.defaultWindow { SDL.windowInitialSize = windowSize }
   win <- SDL.createWindow (Text.pack "PacMan") $ winConfig
