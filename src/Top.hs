@@ -16,29 +16,64 @@ main :: IO ()
 main = do
   putStrLn "*pacman*"
   m <- initMachine
-  picture <- run m seeColourSquares
+  picture <- run m seeColourAndPaletteRoms
   display picture
 
-seeColourSquares :: Prog Picture
-seeColourSquares =
-  Pictures <$> sequence [ seeColourIndex ci | ci <- [0..15] ]
 
-seeColourIndex :: ColourIndex -> Prog Picture
-seeColourIndex ci = do
-  byte <- ReadCol ci
-  let rgb = decodeAsRGB byte
-  let xy = XY {x = 10 + 20 * fromIntegral ci, y = 10}
-  pure $ colSquare xy rgb
+seeColourAndPaletteRoms :: Prog Picture
+seeColourAndPaletteRoms = do
+  cols <- sequence [ seeColour ci | ci <- [0..15] ]
+  pals <- sequence [ seePalette pi | pi <- [0..31] ]
+  pure $ Pictures (cols ++ pals)
 
-colSquare :: XY -> RGB -> Picture
-colSquare XY{x=x0,y=y0} rgb =
+seeColour :: ColourIndex -> Prog Picture
+seeColour ci = do
+  let size = 20
+  rgb <- readColour ci
+  let xy = XY {x = 10 + size * fromIntegral ci, y = 10}
+  pure $ square (size-3) xy rgb
+
+seePalette :: PaletteIndex -> Prog Picture
+seePalette pi = do
+  let size = 10
+  Palette{p0,p1,p2,p3} <- readPalette pi
+  pure $ Pictures
+    [ square (size-2) xy rgb
+    | (rgb,yoff) <- zip [p0,p1,p2,p3] [30,20,10,0]
+    , let xy = XY {x = 10 + size * fromIntegral pi, y = 50 + yoff}
+    ]
+
+square :: Int -> XY -> RGB -> Picture
+square size XY{x=x0,y=y0} rgb =
   Pictures [ Draw xy rgb
-           | x <- [0..17]
-           , y <- [0..19]
+           | x <- [0..size-1]
+           , y <- [0..size-1]
            , let xy = XY (x+x0) (y+y0)
            ]
 
+newtype PaletteIndex = PI Int deriving (Num,Enum,Integral,Real,Ord,Eq)
+
+data Palette = Palette { p0 :: RGB, p1 :: RGB, p2 :: RGB, p3 :: RGB }
+
+readPalette :: PaletteIndex -> Prog Palette
+readPalette (PI i) = do
+  p0 <- readItem 0
+  p1 <- readItem 1
+  p2 <- readItem 2
+  p3 <- readItem 3
+  pure $ Palette { p0, p1, p2, p3 }
+  where
+    readItem off = do
+      byte <- ReadPal (4*i + off)
+      let ci = fromIntegral byte
+      readColour ci
+
 newtype ColourIndex = CI Int deriving (Num,Integral,Real,Enum,Ord,Eq)
+
+readColour :: ColourIndex -> Prog RGB
+readColour (CI i) = do
+  byte <- ReadCol i
+  pure $ decodeAsRGB byte
 
 decodeAsRGB :: Byte -> RGB
 decodeAsRGB (Byte w) = do
@@ -49,11 +84,14 @@ decodeAsRGB (Byte w) = do
     b = bit 6 0x51 + bit 7 0xAE
   RGB { r, g, b }
 
+
+
 data Prog a where
   Ret :: a -> Prog a
   Bind :: Prog a -> (a -> Prog b) -> Prog b
   Trace :: String -> Prog ()
-  ReadCol :: ColourIndex -> Prog Byte
+  ReadCol :: Int -> Prog Byte
+  ReadPal :: Int -> Prog Byte
 
 instance Functor Prog where fmap = liftM
 instance Applicative Prog where pure = return; (<*>) = ap
@@ -61,21 +99,24 @@ instance Monad Prog where return = Ret; (>>=) = Bind
 
 data Machine = Machine
   { colRom :: Rom
+  , palRom :: Rom
   }
 
 initMachine :: IO Machine
 initMachine = do
   colRom <- Rom.load 32 "roms/82s123.7f"
-  pure $ Machine { colRom } where
+  palRom <- Rom.load 256 "roms/82s126.4a"
+  pure $ Machine { colRom, palRom } where
 
 run :: Machine -> Prog a -> IO a
-run Machine{colRom} p = eval p where
+run Machine{colRom,palRom} p = eval p where
   eval :: Prog a -> IO a
   eval = \case
     Ret x -> pure x
     Bind p f -> do a <- eval p; eval (f a)
     Trace s -> print s
-    ReadCol (CI i) -> pure $ Rom.lookup colRom i
+    ReadCol i -> pure $ Rom.lookup colRom i
+    ReadPal i -> pure $ Rom.lookup palRom i
 
 data Picture where
   Draw :: XY -> RGB -> Picture
@@ -87,9 +128,9 @@ data RGB = RGB { r :: Byte, g :: Byte, b :: Byte } deriving Show
 display :: Picture -> IO ()
 display picture = do
   SDL.initializeAll
-  let sf = 2
+  let sf = 3
   let screenW = 340
-  let screenH = 40
+  let screenH = 200
   let windowSize = V2 (sf * screenW) (sf * screenH)
   let winConfig = SDL.defaultWindow { SDL.windowInitialSize = windowSize }
   win <- SDL.createWindow (Text.pack "PacMan") $ winConfig
