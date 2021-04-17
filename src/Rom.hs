@@ -5,7 +5,7 @@ import Control.Monad (unless)
 import Data.Array (Array,(!),listArray)
 import Data.Word8 (Word8)
 import Prelude hiding (lookup)
-import Types (Byte(..))
+import Byte (Byte(..))
 import qualified Data.ByteString as BS (readFile,unpack)
 
 data Rom = Rom { path :: FilePath, size :: Int, bytesA :: Array Int Byte }
