@@ -22,8 +22,7 @@ data TraceConf = TraceConf
 
 traceEmulate :: Handle -> TraceConf -> IO ()
 traceEmulate handle TraceConf{stopAfter,iPeriod,showPixs} = do
-  let rom = () -- Rom.loadInvaders
-  state <- initState rom
+  state <- initState
   loop state
   where
     traceI :: EmuState -> Instruction Byte -> IO ()

@@ -26,14 +26,15 @@ import qualified Addr (fromHiLo,toHiLo,bump)
 --import qualified Buttons (get)
 import qualified Byte (toUnsigned)
 import qualified Cpu (init,get16,set16,get,set,getFlag,setFlag)
-import qualified Mem (init,read,write)
+import qualified Mem (init,readIO,writeIO)
 import qualified Phase (Byte,Addr,Bit)
 import qualified Semantics (fetchDecodeExec,decodeExec)
 --import qualified Shifter (init,get,set)
 --import qualified Sounds (Playing,initPlaying)
 
+import qualified Cpu (Reg(A))
 
-type Rom = ()
+
 type Buttons = ()
 
 
@@ -67,18 +68,28 @@ data EmuState = EmuState
 --  , playing :: Sounds.Playing
   }
 
-initState :: Rom -> IO EmuState
-initState _rom = return $ EmuState
-  { ticks = 0
-  , icount = 0
-  , cpu = Cpu.init (Addr 0) (Byte 0) (Bit False)
-  , mem = Mem.init --rom
-  , interrupts_enabled = False
+initState :: IO EmuState
+initState = do
+  mem <- Mem.init
+  pure $ EmuState
+    { ticks = 0
+    , icount = 0
+    , cpu = cpu0
+    , mem
+    , interrupts_enabled = False
 
-  , nextWakeup = halfFrameTicks
---  , shifter = Shifter.init (Byte 0)
---  , playing = Sounds.initPlaying
-  }
+    , nextWakeup = halfFrameTicks
+    --  , shifter = Shifter.init (Byte 0)
+    --  , playing = Sounds.initPlaying
+    }
+
+
+cpu0 :: Cpu EmuTime
+cpu0 =
+  let cpu1 = Cpu.init (Addr 0) (Byte 0) (Bit False) in
+  let cpu2 = Cpu.set cpu1 Cpu.A 0xFF in -- TODO: necessary?
+  cpu2
+
 
 instance Show EmuState where
   show EmuState{cpu} =
@@ -130,8 +141,13 @@ emulateS CB{traceI} semantics _buttons s0 = do
       --GetShifterReg r -> k s (Shifter.get shifter r)
       --SetShifterReg r b -> k s { shifter = Shifter.set shifter r b} ()
 
-      ReadMem a -> k s (Mem.read mem a)
-      WriteMem a b -> k s { mem = Mem.write mem a b } ()
+      ReadMem a -> do
+        b <- Mem.readIO mem a
+        k s b
+
+      WriteMem a b -> do
+        mem <- Mem.writeIO mem a b
+        k s { mem } ()
 
       EnableInterrupts -> k s { interrupts_enabled = True } ()
       DisableInterrupts -> k s { interrupts_enabled = False } ()

@@ -121,7 +121,7 @@ allOps = map Op0 all0 ++ map Op1 all1 ++ map Op2 all2
       [SHLD,STA,LHLD,LDA,JMP,JMPx,CALL]
       ++ [ LXI r | r <- rps1]
       ++ [ op c | op <- [CCond,JCond], c <- conds]
-      ++ [ CALLx n | n <- [1..3] ]
+--      ++ [ CALLx n | n <- [1..3] ] -- TODO: ED is new on z80
 
     regs = [A,B,C,D,E,H,L,M]
     rps1 = [BC,DE,HL,SP]
