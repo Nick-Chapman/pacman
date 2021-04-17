@@ -1,14 +1,14 @@
 
 module TraceEmu (TraceConf(..),traceEmulate) where
 
-import Addr (Addr(..))
+--import Addr (Addr(..))
 --import Buttons (buttons0)
-import Byte (Byte)
+--import Byte (Byte)
 import Control.Monad (when)
-import Data.Bits (testBit)
-import Emulate (EmuState(..),initState,CB(..),emulate)
-import InstructionSet (Instruction) --,prettyInstructionBytes)
-import Mem (Mem)
+--import Data.Bits (testBit)
+import Emulate (EmuState(..),initState,CB(..),emulate,programCounter)
+--import InstructionSet (Instruction) --,prettyInstructionBytes)
+--import Mem (Mem)
 import System.IO (Handle,hPutStrLn)
 import Text.Printf (printf)
 import qualified Mem (read)
@@ -21,19 +21,29 @@ data TraceConf = TraceConf
   }
 
 traceEmulate :: Handle -> TraceConf -> IO ()
-traceEmulate handle TraceConf{stopAfter,iPeriod,showPixs} = do
+traceEmulate handle TraceConf{stopAfter,iPeriod,showPixs=_} = do
   state <- initState
   loop state
   where
-    traceI :: EmuState -> Instruction Byte -> IO ()
+{-    traceI :: EmuState -> Instruction Byte -> IO ()
     traceI s instruction = do
       let EmuState{icount} = s
       let onPeriod = icount `mod` iPeriod == 0
       let isStop = case stopAfter of Just i -> (icount > i); Nothing -> False
       when (onPeriod && not isStop) $
-        hPutStrLn handle $ traceLine showPixs s instruction
+        hPutStrLn handle $ traceLineI showPixs s instruction
+-}
 
-    cb = CB { traceI = Just traceI }
+    traceState :: EmuState -> IO ()
+    traceState s = do
+      let EmuState{icount} = s
+      let onPeriod = icount `mod` iPeriod == 0
+      let isStop = case stopAfter of Just i -> (icount > i); Nothing -> False
+      when (onPeriod && not isStop) $
+        hPutStrLn handle $ traceLine s
+
+
+    cb = CB { traceState } --, traceI = Just traceI }
 
     loop :: EmuState -> IO ()
     loop pre = do
@@ -45,8 +55,18 @@ traceEmulate handle TraceConf{stopAfter,iPeriod,showPixs} = do
 
     buttons0 = ()
 
-traceLine :: Bool -> EmuState -> Instruction Byte -> String
-traceLine showPixs s@EmuState{ticks,icount,mem} i = do
+traceLine :: EmuState -> String -- TODO: make this show of EmuState
+traceLine s@EmuState{ticks,icount,mem} = do
+  unwords
+    [ show s
+    , "(" ++ unwords [ show b | a <- take 4 [programCounter s ..], let b = Mem.read mem a ] ++ "),"
+    , printf "cyc: %s," (show ticks)
+    , printf "(%d)" icount
+    ]
+
+
+{-traceLineI :: Bool -> EmuState -> Instruction Byte -> String
+traceLineI showPixs s@EmuState{ticks,icount,mem} i = do
   let pixs = onPixels (getDisplayFromMem mem)
   unwords
     [ printf "%8d" icount
@@ -58,8 +78,9 @@ traceLine showPixs s@EmuState{ticks,icount,mem} i = do
       then unwords [ ljust 15 (show i), printf "#pixs:%d" (length pixs) ]
       else show i
     ]
+-}
 
-
+{-
 data OnPixel = OnPixel { x :: Int, y :: Int }
 
 data Display = Display { onPixels :: [OnPixel] }
@@ -75,10 +96,12 @@ getDisplayFromMem mem = do
     , byte `testBit` yBit
     , let y  = 8 * yByte + yBit
     ]
+-}
 
-
+{-
 ljust :: Int -> String -> String
 ljust n s = s <> take (max 0 (n - length s)) (repeat ' ')
 
 rjust :: Int -> String -> String
 rjust n s = take (max 0 (n - length s)) (repeat ' ') <> s
+-}

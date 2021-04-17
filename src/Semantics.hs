@@ -22,6 +22,7 @@ import InstructionSet (RegSpec(..))
 
 fetchDecodeExec :: Eff p ()
 fetchDecodeExec = do
+  Trace
   byte <- fetch
   decodeExec byte
 
@@ -33,7 +34,7 @@ decodeExec byte = do
 
 execInstruction :: Instruction (Byte p) -> Eff p ()
 execInstruction instruction = do
-  TraceInstruction instruction
+  --TraceInstruction instruction
   n <- execute instruction >>= \case
     Next -> do
       return $ cycles False (justOp instruction)

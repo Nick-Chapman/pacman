@@ -31,6 +31,7 @@ data Cpu p = Cpu
   , regC :: Byte p
   , regD :: Byte p
   , regE :: Byte p
+  , regF :: Byte p -- TODO: amalgamated flags
   , flagS :: Bit p
   , flagZ :: Bit p
   , flagA :: Bit p
@@ -41,29 +42,29 @@ data Cpu p = Cpu
 instance (Show (Addr p), Show (Bit p), Show (Byte p)) => Show (Cpu p) where
   show Cpu{pch,pcl
           ,sp,hl
-          ,regA,regB,regC,regD,regE
-          ,flagS,flagZ,flagA,flagP,flagCY} = unwords
-    [ name <> ":" <> v
+          ,regA,regB,regC,regD,regE,regF
+          --,flagS,flagZ,flagA,flagP,flagCY
+          } = unwords
+    [ name ++ ": " ++ v
     | (name,v) <-
-      [ ("PC",show pch <> show pcl)
-      , ("A", show regA)
-      , ("B", show regB)
-      , ("C", show regC)
-      , ("D", show regD)
-      , ("E", show regE)
-      , ("HL", show hl)
-      , ("SP", show sp)
-      , ("SZAPY", show flagS <> show flagZ <> show flagA <> show flagP <> show flagCY)
+      [ ("PC", show pch ++ show pcl ++ ",")
+      , ("AF", show regA ++ show regF ++ ",")
+      , ("BC", show regB ++ show regC ++ ",")
+      , ("DE", show regD ++ show regE  ++ ",")
+      , ("HL", show hl  ++ ",")
+      , ("SP", show sp  ++ ",")
+--      , ("SZAPY", show flagS <> show flagZ <> show flagA <> show flagP <> show flagCY)
       ]
     ]
 
 
-init :: Addr p -> Byte p -> Bit p -> Cpu p
-init addr0 b bit0 =
+init :: Addr p -> Addr p -> Byte p -> Byte p -> Bit p -> Cpu p
+init addr0 aFF b bFF bit0 =
   Cpu { pch = b, pcl = b
-      , sp = addr0
+      , sp = aFF
       , hl = addr0
-      , regA = b, regB = b, regC = b, regD = b, regE = b
+      , regA = bFF, regF = bFF
+      , regB = b, regC = b, regD = b, regE = b
       , flagS = bit0, flagZ = bit0, flagA = bit0, flagP = bit0, flagCY = bit0
       }
 
@@ -123,7 +124,7 @@ kindOfMap :: (Addr a -> Addr b) -> (Byte a -> Byte b) -> (Bit a -> Bit b) -> Cpu
 kindOfMap af f g = \case
   Cpu{pch,pcl
      ,sp,hl
-     ,regA,regB,regC,regD,regE
+     ,regA,regB,regC,regD,regE,regF
      ,flagS,flagZ,flagA,flagP,flagCY} ->
     Cpu { pch = f pch
         , pcl = f pcl
@@ -134,6 +135,7 @@ kindOfMap af f g = \case
         , regC = f regC
         , regD = f regD
         , regE = f regE
+        , regF = f regF
         , flagS = g flagS
         , flagZ = g flagZ
         , flagA = g flagA

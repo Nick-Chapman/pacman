@@ -1,8 +1,9 @@
 
 module SlowEmulate (
   Ticks(..),
-  prettyPrefix,
+--  prettyPrefix,
   EmuState(..), initState,
+  programCounter,
   CB(..),
   emulate,
   Bit(..),
@@ -15,7 +16,7 @@ import Cpu (Cpu,Reg(PCL,PCH))
 import Data.Bits
 import Effect (Eff(..))
 import HiLo (HiLo(..))
-import InstructionSet (Instruction,decode)
+import InstructionSet (decode) --Instruction,decode)
 import Mem (Mem)
 import Phase (Phase)
 --import Rom (Rom)
@@ -28,20 +29,21 @@ import qualified Byte (toUnsigned)
 import qualified Cpu (init,get16,set16,get,set,getFlag,setFlag)
 import qualified Mem (init,readIO,writeIO)
 import qualified Phase (Byte,Addr,Bit)
-import qualified Semantics (fetchDecodeExec,decodeExec)
+import qualified Semantics (fetchDecodeExec) --,decodeExec)
 --import qualified Shifter (init,get,set)
 --import qualified Sounds (Playing,initPlaying)
 
-import qualified Cpu (Reg(A))
+--import qualified Cpu (Reg(A))
 
 
 type Buttons = ()
 
 
--- | Ticks of the 2 MHz clock
+-- | Clock ticks
 newtype Ticks = Ticks { unTicks :: Int } deriving (Eq,Ord,Num)
 
-instance Show Ticks where show = printf "[%08d]" . unTicks
+--instance Show Ticks where show = printf "[%08d]" . unTicks
+instance Show Ticks where show = printf "%d" . unTicks
 
 
 data EmuTime -- At Emulation type we have concrete Bytes
@@ -63,7 +65,7 @@ data EmuState = EmuState
   , cpu :: Cpu EmuTime
   , mem :: Mem
   , interrupts_enabled :: Bool
-  , nextWakeup :: Ticks
+--  , nextWakeup :: Ticks
 --  , shifter :: Shifter EmuTime
 --  , playing :: Sounds.Playing
   }
@@ -78,7 +80,7 @@ initState = do
     , mem
     , interrupts_enabled = False
 
-    , nextWakeup = halfFrameTicks
+--    , nextWakeup = halfFrameTicks
     --  , shifter = Shifter.init (Byte 0)
     --  , playing = Sounds.initPlaying
     }
@@ -86,9 +88,7 @@ initState = do
 
 cpu0 :: Cpu EmuTime
 cpu0 =
-  let cpu1 = Cpu.init (Addr 0) (Byte 0) (Bit False) in
-  let cpu2 = Cpu.set cpu1 Cpu.A 0xFF in -- TODO: necessary?
-  cpu2
+  Cpu.init (Addr 0) (Addr 0xFFFF) (Byte 0) (Byte 0xFF) (Bit False)
 
 
 instance Show EmuState where
@@ -99,12 +99,13 @@ instance Show EmuState where
 
 
 data CB = CB
-  { traceI :: Maybe (EmuState -> Instruction Byte -> IO ())
+  { -- traceI :: Maybe (EmuState -> Instruction Byte -> IO ())
+    traceState :: EmuState -> IO ()
   }
 
 emulate :: CB -> Buttons -> EmuState -> IO EmuState
-emulate cb buttons s@EmuState{interrupts_enabled} = do
-  case timeToWakeup s of
+emulate cb buttons s@EmuState{interrupts_enabled=_IGNORED} = do
+{-  case timeToWakeup s of
     Just s
       | interrupts_enabled -> do
           let s2 = s { interrupts_enabled = False }
@@ -112,12 +113,12 @@ emulate cb buttons s@EmuState{interrupts_enabled} = do
           emulateS cb (Semantics.decodeExec byte) buttons s2
       | otherwise ->
         emulateS cb Semantics.fetchDecodeExec buttons s
-    Nothing ->
+    Nothing ->-}
       emulateS cb Semantics.fetchDecodeExec buttons s
 
 
 emulateS :: CB -> Eff EmuTime () -> Buttons -> EmuState -> IO EmuState
-emulateS CB{traceI} semantics _buttons s0 = do
+emulateS CB{traceState} semantics _buttons s0 = do
   run s0 semantics $ \post () -> do
     return post
 
@@ -154,11 +155,16 @@ emulateS CB{traceI} semantics _buttons s0 = do
 
       Decode byte -> k s (decode byte)
       MarkReturnAddress {} -> k s ()
-      TraceInstruction i -> do
+
+      Trace -> do
+        traceState s
+        k s ()
+
+      {-TraceInstruction i -> do
         case traceI of
           Nothing -> return ()
           Just tr -> tr s i
-        k s ()
+        k s () -}
 
       Advance n -> k (advance (Ticks n) s) ()
 
@@ -225,6 +231,7 @@ advance :: Ticks -> EmuState -> EmuState
 advance n s@EmuState{icount,ticks} =
   s { icount = icount + 1, ticks = ticks + n }
 
+{-
 halfFrameTicks :: Ticks
 halfFrameTicks = Ticks (2000000 `div` 120) - n -- Experiment with reducing this value.
   -- turns out that even a reduction of just 1000 cycles
@@ -244,3 +251,4 @@ timeToWakeup s@EmuState{ticks,nextWakeup} = do
     Just s { nextWakeup =
              Ticks ((unTicks ticks `div` unTicks halfFrameTicks) + 1) * halfFrameTicks
            }
+-}
