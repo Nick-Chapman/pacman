@@ -613,23 +613,22 @@ call a = do
 
 
 saveAndSetFlagsFrom :: RegSpec -> Bit p -> Byte p -> Eff p ()
-saveAndSetFlagsFrom reg overflow v = do
+saveAndSetFlagsFrom reg p v = do
   save reg v
-  setFlagsFrom overflow v
+  setFlagsFrom p v
 
 setFlagsFrom :: Bit p -> Byte p -> Eff p ()
-setFlagsFrom overflow value = do
+setFlagsFrom p value = do
   s <- IsSigned value
   z <- IsZero value
-  _p <- IsParity value
-  let p = overflow
+  x <- TestBit value 3
+  y <- TestBit value 5
   SetFlag Cpu.SF s
   SetFlag Cpu.ZF z
   SetFlag Cpu.PF p
-  -- TODO: properly set the new flags (X,Y,N)
-  false <- MakeBit False
-  SetFlag Cpu.XF false
-  SetFlag Cpu.YF false
+  SetFlag Cpu.XF x
+  SetFlag Cpu.YF y
+  false <- MakeBit False -- TODO: set NF correctly
   SetFlag Cpu.NF false
 
 
