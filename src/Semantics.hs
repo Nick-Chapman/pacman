@@ -455,7 +455,23 @@ execute1 op1 b1 = case op1 of
     setFlagsFrom v
     SetFlag Cpu.FlagCY borrow
     return Next
-
+  DJNZ -> do
+    b <- load B
+    cin <- MakeBit False
+    ff <- MakeByte 0xFF
+    (b',_coutIgnored) <- AddWithCarry cin b ff
+    save B b'
+    dontJump <- IsZero b'
+    CaseBit dontJump >>= \case
+      True ->
+        return Next
+      False -> do
+        pc <- getPC
+        zero <- MakeByte 0x0
+        displacement <- MakeAddr (HiLo{hi=zero,lo=b1})
+        (dest,_coutIgnored) <- Add16 pc displacement
+        dest' <- OffsetAddr (-256) dest -- TODO: dont do this for forward jumps
+        return (Jump dest')
 
 binop
   :: (Byte p -> Byte p -> Eff p (Byte p))
