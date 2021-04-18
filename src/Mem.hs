@@ -9,17 +9,28 @@ import Rom (Rom)
 import qualified Ram (init,read,write)
 import qualified Rom (load,lookup)
 
-data Mem = Mem { rom :: Rom , ram :: Ram } -- TODO: mem mapped IO
+data Mem = Mem  -- TODO: mem mapped IO
+  { rom6e :: Rom
+  , rom6f :: Rom
+  , rom6h :: Rom
+--  , rom6j :: Rom
+  , ram :: Ram
+  }
 
 init :: IO Mem
 init = do
-  rom <- Rom.load 4096 "roms/pacman.6e" -- TODO: 3 other roms! merge!!
+  rom6e <- Rom.load 4096 "roms/pacman.6e"
+  rom6f <- Rom.load 4096 "roms/pacman.6f"
+  rom6h <- Rom.load 4096 "roms/pacman.6h"
+  -- TODO: rom6j
   let ram = Ram.init (4 * 1024)
-  pure $ Mem { rom, ram }
+  pure $ Mem { rom6e, rom6f, rom6h, ram }
 
 read :: Mem -> Addr -> Byte
-read Mem{rom,ram} a = if
-  | (a < startRam) -> Rom.lookup rom (fromIntegral a)
+read Mem{rom6e,rom6f,rom6h,ram} a = if
+  | (a < 0x1000) -> Rom.lookup rom6e (fromIntegral a)
+  | (a < 0x2000) -> Rom.lookup rom6f (fromIntegral a - 0x1000)
+  | (a < 0x3000) -> Rom.lookup rom6h (fromIntegral a - 0x2000)
   | (a >= startRam && a < endRam) -> do
       undefined ram Ram.read
   | otherwise ->
@@ -27,8 +38,6 @@ read Mem{rom,ram} a = if
 
 write :: Mem -> Addr -> Byte -> Mem
 write mem@Mem{ram} a b = if
---  | a == 0xFFFF -> mem -- TODO: ignored
---  | a == 0xFFFE -> mem -- TODO: ignored
   | (a >= startRam && a < endRam) -> do
       let! ram' = Ram.write ram (fromIntegral (a - startRam)) b
       mem { ram = ram' }
