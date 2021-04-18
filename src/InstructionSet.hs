@@ -4,9 +4,8 @@ module InstructionSet (
   Instruction(..), justOp,
   cycles,
   decodeAfterED,
-  decode, --encode,
-  --prettyInstructionBytes,
-  --theDecodeTable
+  decode,
+  theDecodeTable
   ) where
 
 import Byte (Byte(..))
@@ -26,7 +25,6 @@ data Op = Op0 Op0 | Op1 Op1 | Op2 Op2
 -- | Ops which take zero immediate bytes. Listed in encoding order
 data Op0
   = NOP
---  | NOPx Word8 -- (1..7)
   | STAX RegPairSpec
   | INX RegPairSpec
   | INR RegSpec
@@ -59,7 +57,6 @@ data Op0
   | PUSH RegPairSpec
   | RST Word8 --(0..7)
   | RET
---  | RETx
   | PCHL
   | SPHL
   | XCHG
@@ -91,10 +88,8 @@ data Op2
   | LDA
   | JCond Condition
   | JMP
---  | JMPx
   | CCond Condition
   | CALL
---  | CALLx Word8 -- (0..3)
   deriving (Eq,Ord,Show)
 
 data Condition = NZ | NC | PO | P | Z | CY | PE | MI
@@ -110,8 +105,7 @@ allOps :: [Op]
 allOps = map Op0 all0 ++ map Op1 all1 ++ map Op2 all2
   where
     all0 =
-      [NOP,RLC,RAL,DAA,STC,RRC,RAR,CMA,CMC,HLT,XTHL,DI,RET--,RETx
-      ,PCHL,SPHL,XCHG,EI]
+      [NOP,RLC,RAL,DAA,STC,RRC,RAR,CMA,CMC,HLT,XTHL,DI,RET,PCHL,SPHL,XCHG,EI]
       ++ [ op p | op <- [STAX,LDAX], p <- [BC,DE] ]
       ++ [ op r | op <- [INR,DCR,ADD,ADC,SUB,SBB,ANA,XRA,ORA,CMP], r <- regs ]
       ++ [ op p | op <- [INX,DAD,DCX], p <- rps1 ]
@@ -119,27 +113,22 @@ allOps = map Op0 all0 ++ map Op1 all1 ++ map Op2 all2
       ++ [ MOV {dest,src} | dest <- regs, src <- regs, not (dest==M && src==M) ]
       ++ [ RCond c | c <- conds ]
       ++ [ RST n | n <- [0..7] ]
---      ++ [ NOPx n | n <- [1..7] ]
     all1 =
       [ADI,SUI,ANI,ORI,ACI,SBI,XRI,CPI,OUT,IN] ++ [ MVI r | r <- regs ]
       ++ [DJNZ]
     all2 =
-      [SHLD,STA,LHLD,LDA,JMP--,JMPx
-      ,CALL]
+      [SHLD,STA,LHLD,LDA,JMP,CALL]
       ++ [ LXI r | r <- rps1]
       ++ [ op c | op <- [CCond,JCond], c <- conds]
---      ++ [ CALLx n | n <- [1..3] ] -- TODO: ED is prefix on z80
 
     regs = [A,B,C,D,E,H,L,M]
     rps1 = [BC,DE,HL,SP]
     rps2 = [BC,DE,HL,PSW]
     conds= [Z,NZ,CY,NC,PO,PE,P,MI]
 
-
 cycles :: Bool -> Op -> Int
 cycles jumpTaken = \case
   Op0 NOP -> 4
---  Op0 NOPx{} -> 4
   Op2 LXI{} -> 10
   Op0 STAX{} -> 7
   Op2 SHLD -> 16
@@ -152,7 +141,7 @@ cycles jumpTaken = \case
   Op0 RAL -> 4
   Op0 DAA -> 4
   Op0 STC -> 4
-  Op0 DAD{} -> 10 -- oops, I had a bug. I had 11
+  Op0 DAD{} -> 10
   Op0 LDAX{} -> 7
   Op2 LHLD -> 16
   Op2 LDA -> 13
@@ -178,7 +167,6 @@ cycles jumpTaken = \case
   Op0 POP{} -> 10
   Op2 JCond{} -> 10
   Op2 JMP -> 10
---  Op2 JMPx -> 10
   Op1 OUT -> 10
   Op0 XTHL -> 18
   Op0 DI -> 4
@@ -190,14 +178,12 @@ cycles jumpTaken = \case
   Op1 ORI -> 7
   Op0 RST{} -> 4
   Op0 RET -> 10
---  Op0 RETx -> 10
   Op0 PCHL -> 5
   Op0 SPHL -> 5
   Op1 IN -> 10
-  Op0 XCHG -> 4 -- colourful reference table say 5, but is it wrong. The systems ref doc says 4.
+  Op0 XCHG -> 4
   Op0 EI -> 4
   Op2 CALL -> 17
---  Op2 CALLx{} -> 17
   Op1 ACI -> 7
   Op1 SBI -> 7
   Op1 XRI -> 7
@@ -213,92 +199,6 @@ data Instruction b -- op+args
   | Ins2 Op2 b b
   deriving (Functor,Show)
 
-{-instance Show b => Show (Instruction b) where
-  show i = prettyInstruction i-}
-
-{-
-prettyInstructionBytes :: Show b => Instruction b -> String
-prettyInstructionBytes i = unwords bytes
-  where
-    b0 = encode op
-    op = justOp i
-    bytes = case i of
-      Ins0 _ -> [show b0]
-      Ins1 _ b1 -> [show b0,show b1]
-      Ins2 _ b1 b2 -> [show b0,show b1,show b2]
-
-prettyInstruction :: Show b => Instruction b -> String
-prettyInstruction = \case
-  Ins0 NOP -> "NOP"
---  Ins0 NOPx{} -> "*NOP"
-  Ins2 (LXI rp) b1 b2 -> tag "LD" (show rp <> "," <> show b2 <> show b1)
-  Ins2 SHLD b1 b2 -> tag "LD" ("(" <> show b2 <> show b1 <> "),HL")
-  Ins2 STA b1 b2 -> tag "LD" ("("<> show b2 <> show b1 <> "),A")
-  Ins0 (STAX rp) -> tag "LD" "(" <> show rp <> "),A"
-  Ins0 (INX rp) -> tag "INC" (show rp)
-  Ins0 (INR reg) -> tag "INC" (prettyReg reg)
-  Ins0 (DCR reg) -> tag "DEC" (prettyReg reg)
-  Ins1 (MVI dest) b1 -> tag "LD" (prettyReg dest <> "," <> show b1)
-  Ins0 RLC -> "RLCA"
-  Ins0 RAL -> "RAL"
-  Ins0 DAA -> "DAA"
-  Ins0 STC -> "SCF"
-  Ins0 (DAD rp) -> tag "ADD" ("HL," <> show rp)
-  Ins0 (LDAX rp) -> tag "LD" "A,(" <> show rp <> ")"
-  Ins2 LHLD b1 b2 -> tag "LD" ("HL,(" <> show b2 <> show b1 <> ")")
-  Ins2 LDA b1 b2 -> tag "LD" ("A,("<> show b2 <> show b1 <> ")")
-  Ins0 (DCX rp) -> tag "DEC" (show rp)
-  Ins0 RRC -> "RRCA"
-  Ins0 RAR -> "RAR"
-  Ins0 CMA -> "CPL"
-  Ins0 CMC -> "CPC"
-  Ins0 MOV {dest,src} -> tag "LD" (prettyReg dest <> "," <> prettyReg src)
-  Ins0 HLT -> "HLT"
-  Ins0 (ADD reg) -> tag "ADD" (prettyReg reg)
-  Ins0 (ADC reg) -> tag "ADC" (prettyReg reg)
-  Ins0 (SUB reg) -> tag "SUB" (prettyReg reg)
-  Ins0 (SBB reg) -> tag "SBC" (prettyReg reg)
-  Ins0 (ANA reg) -> tag "AND" (prettyReg reg)
-  Ins0 (XRA reg) -> tag "XOR" (prettyReg reg)
-  Ins0 (ORA reg) -> tag "OR" (prettyReg reg)
-  Ins0 (CMP reg) -> tag "CP" (prettyReg reg)
-  Ins0 (RCond cond) -> tag "RET" (show cond)
-  Ins0 (POP rp) -> tag "POP" (show rp)
-  Ins2 (JCond cond) b1 b2 -> tag "JP" (show cond <> "," <> show b2 <> show b1)
-  Ins2 JMP b1 b2 -> tag "JP" (show b2 <> show b1)
---  Ins2 JMPx b1 b2 -> tag "*JP" (show b2 <> show b1)
-  Ins1 OUT b1 -> tag "OUT" (show b1)
-  Ins0 XTHL -> tag "EX" "(SP),HL"
-  Ins0 DI -> "DI"
-  Ins2 (CCond cond) b1 b2 -> tag "CALL" (show cond <> "," <> show b2 <> show b1)
-  Ins0 (PUSH rp) -> tag "PUSH" (show rp)
-  Ins1 ADI b1 -> tag "ADD" (show b1)
-  Ins1 SUI b1 -> tag "SUB" (show b1)
-  Ins1 ANI b1 -> tag "AND" (show b1)
-  Ins1 ORI b1 -> tag "OR" (show b1)
-  Ins0 (RST n) -> tag "RST" (show n)
-  Ins0 RET -> "RET"
---  Ins0 RETx -> "*RET"
-  Ins0 PCHL -> tag "JP" "(HL)"
-  Ins0 SPHL -> tag "LD" "SP,HL"
-  Ins1 IN b1 -> tag "IN" (show b1)
-  Ins0 XCHG -> tag "EX" "DE,HL"
-  Ins0 EI -> "EI"
-  Ins2 CALL b1 b2 -> tag "CALL" (show b2 <> show b1)
---  Ins2 CALLx{} b1 b2 -> tag "*CAL" (show b2 <> show b1)
-  Ins1 ACI b1 -> tag "ADC" (show b1)
-  Ins1 SBI b1 -> tag "SBC" (show b1)
-  Ins1 XRI b1 -> tag "XOR" (show b1)
-  Ins1 CPI b1 -> tag "CP" (show b1)
-  where
-    tag s more = ljust 5 s <> more
-
-prettyReg :: RegSpec -> String
-prettyReg = \case
-  M -> "(HL)"
-  reg -> show reg
--}
-
 ljust :: Int -> String -> String
 ljust n s = s <> take (max 0 (n - length s)) (repeat ' ')
 
@@ -311,7 +211,6 @@ justOp = \case
 encode :: Op -> Byte
 encode = \case
   Op0 NOP -> 0x00
---  Op0 (NOPx n) -> Byte (8 * n)
   Op2 (LXI rp) -> Byte (16 * encodeRegPairSpec rp + 0x1)
   Op2 SHLD -> 0x22
   Op2 STA -> 0x32
@@ -347,7 +246,6 @@ encode = \case
   Op0 (POP rp) -> Byte (16 * encodeRegPairSpec rp + 0xC1)
   Op2 (JCond cond) -> Byte (8 * encodeCondition cond + 0xC2)
   Op2 JMP -> 0xC3
---  Op2 JMPx -> 0xCB
   Op1 OUT -> 0xD3
   Op0 XTHL -> 0xE3
   Op0 DI -> 0xF3
@@ -359,14 +257,12 @@ encode = \case
   Op1 ORI -> 0xF6
   Op0 (RST n) -> Byte (8 * fromIntegral n + 0xC7)
   Op0 RET -> 0xC9
---  Op0 RETx -> 0xD9
   Op0 PCHL -> 0xE9
   Op0 SPHL -> 0xF9
   Op1 IN -> 0xDB
   Op0 XCHG -> 0xEB
   Op0 EI -> 0xFB
   Op2 CALL -> 0xCD
---  Op2 (CALLx n) -> Byte (16 * n + 0xCD)
   Op1 ACI -> 0xCE
   Op1 SBI -> 0xDE
   Op1 XRI -> 0xEE
@@ -405,12 +301,10 @@ encodeRegPairSpec = \case
   SP -> 3
   PSW -> 3 -- for PUSH/POP
 
-
 decodeAfterED :: Byte -> Op
 decodeAfterED = \case
   0x47 -> Op0 (MOV {src=A,dest=I})
   byte -> error (show ("decodeAfterED",byte))
-
 
 -- | define decode as the inverse of encoding
 decode :: Byte -> Either Prefix Op
