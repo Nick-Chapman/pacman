@@ -33,7 +33,7 @@ import qualified Semantics (fetchDecodeExec) --,decodeExec)
 --import qualified Shifter (init,get,set)
 --import qualified Sounds (Playing,initPlaying)
 
-import qualified Cpu (Reg(Flags))
+import qualified Cpu (Reg(F))
 
 
 type Buttons = ()
@@ -140,17 +140,17 @@ emulateS CB{traceState} semantics _buttons s0 = do
       --GetFlag flag -> k s (Cpu.getFlag cpu flag)
       --SetFlag flag bit -> k s { cpu = Cpu.setFlag cpu flag bit} ()
 
-      GetFlag flag -> do
-        let byte = Cpu.get cpu Cpu.Flags
+      GetFlag flag -> do -- TODO: move in Semantics; remove as effect
+        let byte = Cpu.get cpu Cpu.F
         let pos = flagBitPos flag
         let bit = Bit (byte `testBit` pos)
         k s bit
 
-      SetFlag flag (Bit bool) -> do
-        let byte = Cpu.get cpu Cpu.Flags
+      SetFlag flag (Bit bool) -> do -- TODO: move in Semantics; remove as effect
+        let byte = Cpu.get cpu Cpu.F
         let pos = flagBitPos flag
         let byte' = (if bool then setBit else clearBit) byte pos
-        k s { cpu = Cpu.set cpu Cpu.Flags byte' } ()
+        k s { cpu = Cpu.set cpu Cpu.F byte' } ()
 
       --GetShifterReg r -> k s (Shifter.get shifter r)
       --SetShifterReg r b -> k s { shifter = Shifter.set shifter r b} ()

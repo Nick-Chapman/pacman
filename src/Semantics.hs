@@ -100,7 +100,7 @@ execute0 = \case
     zero <- MakeByte 0
     (v,_coutIgnored) <- AddWithCarry cin v0 zero
     aux <- addForAuxCarry cin v0 zero
-    SetFlag Cpu.FlagA aux
+    SetFlag Cpu.HF aux
     saveAndSetFlagsFrom reg v
     return Next
   DCR reg -> do
@@ -116,7 +116,7 @@ execute0 = \case
     shunted <- byte `TestBit` 7
     shifted <- byte `ShiftLeft` one
     rotated <- UpdateBit shifted 0 shunted
-    SetFlag Cpu.FlagCY shunted
+    SetFlag Cpu.CF shunted
     save A rotated
     return Next
   RAL -> do
@@ -124,31 +124,31 @@ execute0 = \case
     one <- MakeByte 1
     shunted <- byte `TestBit` 7
     shifted <- byte `ShiftLeft` one
-    cin <- GetFlag Cpu.FlagCY
+    cin <- GetFlag Cpu.CF
     rotated <- UpdateBit shifted 0 cin
-    SetFlag Cpu.FlagCY shunted
+    SetFlag Cpu.CF shunted
     save A rotated
     return Next
   DAA -> do
     byteIn <- load A
-    auxIn <- GetFlag Cpu.FlagA
-    cin <- GetFlag Cpu.FlagCY
+    auxIn <- GetFlag Cpu.HF
+    cin <- GetFlag Cpu.CF
     (byteOut,auxOut,cout) <- decimalAdjust auxIn cin byteIn
-    SetFlag Cpu.FlagA auxOut
-    SetFlag Cpu.FlagCY cout
+    SetFlag Cpu.HF auxOut
+    SetFlag Cpu.CF cout
     save A byteOut
     setFlagsFrom byteOut
     return Next
   STC -> do
     bit <- MakeBit True
-    SetFlag Cpu.FlagCY bit
+    SetFlag Cpu.CF bit
     return Next
   DAD rp -> do
     w1 <- load16 rp
     w2 <- load16 HL
     (w,cout) <- Add16 w1 w2
     save16 HL w
-    SetFlag Cpu.FlagCY cout
+    SetFlag Cpu.CF cout
     return Next
   LDAX rp -> do
     a <- load16 rp
@@ -166,7 +166,7 @@ execute0 = \case
     shunted <- byte `TestBit` 0
     shifted <- byte `ShiftRight` one
     rotated <- UpdateBit shifted 7 shunted
-    SetFlag Cpu.FlagCY shunted
+    SetFlag Cpu.CF shunted
     save A rotated
     return Next
   RAR -> do
@@ -174,9 +174,9 @@ execute0 = \case
     one <- MakeByte 1
     shunted <- byte `TestBit` 0
     shifted <- byte `ShiftRight` one
-    cin <- GetFlag Cpu.FlagCY
+    cin <- GetFlag Cpu.CF
     rotated <- UpdateBit shifted 7 cin
-    SetFlag Cpu.FlagCY shunted
+    SetFlag Cpu.CF shunted
     save A rotated
     return Next
   CMA -> do
@@ -185,9 +185,9 @@ execute0 = \case
     save A v
     return Next
   CMC -> do -- untested
-    bit <- GetFlag Cpu.FlagCY
+    bit <- GetFlag Cpu.CF
     bit' <- Flip bit
-    SetFlag Cpu.FlagCY bit'
+    SetFlag Cpu.CF bit'
     return Next
   MOV {dest,src} -> do
     b <- load src
@@ -204,7 +204,7 @@ execute0 = \case
     addToAccWithCarry cin v1
   ADC reg -> do
     v1 <- load reg
-    cin <- GetFlag Cpu.FlagCY
+    cin <- GetFlag Cpu.CF
     addToAccWithCarry cin v1
   SUB reg -> do
     v1 <- load reg
@@ -212,7 +212,7 @@ execute0 = \case
     subToAccWithCarry cin v1
   SBB reg -> do
     v1 <- load reg
-    cin <- GetFlag Cpu.FlagCY
+    cin <- GetFlag Cpu.CF
     subToAccWithCarry cin v1
   ANA reg -> do
     v1 <- load reg
@@ -228,7 +228,7 @@ execute0 = \case
     v2 <- load reg
     (v,borrow) <- subtract v1 v2
     setFlagsFrom v
-    SetFlag Cpu.FlagCY borrow
+    SetFlag Cpu.CF borrow
     return Next
   RCond cond -> do
     executeCond cond >>= CaseBit >>= \case
@@ -370,14 +370,14 @@ add6 v = do
 
 executeCond :: Condition -> Eff p (Bit p)
 executeCond = \case
-  NZ -> GetFlag Cpu.FlagZ >>= Flip
-  Z -> GetFlag Cpu.FlagZ
-  NC -> GetFlag Cpu.FlagCY >>= Flip
-  CY -> GetFlag Cpu.FlagCY
-  PO -> GetFlag Cpu.FlagP >>= Flip
-  PE -> GetFlag Cpu.FlagP
-  P -> GetFlag Cpu.FlagS >>= Flip
-  MI -> GetFlag Cpu.FlagS
+  NZ -> GetFlag Cpu.ZF >>= Flip
+  Z -> GetFlag Cpu.ZF
+  NC -> GetFlag Cpu.CF >>= Flip
+  CY -> GetFlag Cpu.CF
+  PO -> GetFlag Cpu.PF >>= Flip
+  PE -> GetFlag Cpu.PF
+  P -> GetFlag Cpu.SF >>= Flip
+  MI -> GetFlag Cpu.SF
 
 
 load :: RegSpec -> Eff p (Byte p)
@@ -442,10 +442,10 @@ execute1 op1 b1 = case op1 of
     save A value
     return Next-}
   ACI -> do
-    cin <- GetFlag Cpu.FlagCY
+    cin <- GetFlag Cpu.CF
     addToAccWithCarry cin b1
   SBI -> do
-    cin <- GetFlag Cpu.FlagCY
+    cin <- GetFlag Cpu.CF
     subToAccWithCarry cin b1
   XRI -> do
     binop XorB b1
@@ -453,7 +453,7 @@ execute1 op1 b1 = case op1 of
     b <- load A
     (v,borrow) <- subtract b b1
     setFlagsFrom v
-    SetFlag Cpu.FlagCY borrow
+    SetFlag Cpu.CF borrow
     return Next
   DJNZ -> do
     b <- load B
@@ -495,18 +495,18 @@ andA b1 = do
   resetCarry
   w <- OrB b1 v0
   aux <- TestBit w 3
-  SetFlag Cpu.FlagA aux
+  SetFlag Cpu.HF aux
   return Next
 
 resetCarry :: Eff p ()
 resetCarry = do
   c <- MakeBit False
-  SetFlag Cpu.FlagCY c
+  SetFlag Cpu.CF c
 
 resetAux :: Eff p ()
 resetAux = do
   a <- MakeBit False
-  SetFlag Cpu.FlagA a
+  SetFlag Cpu.HF a
 
 
 execute2 :: Op2 -> Addr p -> Eff p (Flow p)
@@ -559,8 +559,8 @@ addToAccWithCarry cin v1 = do
   v2 <- load A
   (v,cout) <- AddWithCarry cin v1 v2
   aux <- addForAuxCarry cin v1 v2
-  SetFlag Cpu.FlagA aux
-  SetFlag Cpu.FlagCY cout
+  SetFlag Cpu.HF aux
+  SetFlag Cpu.CF cout
   saveAndSetFlagsFrom A v
   return Next
 
@@ -569,7 +569,7 @@ subToAccWithCarry :: Bit p -> Byte p -> Eff p (Flow p)
 subToAccWithCarry cin v2 = do
   v1 <- load A
   (v,cout) <- subWithCarry cin v1 v2
-  SetFlag Cpu.FlagCY cout
+  SetFlag Cpu.CF cout
   saveAndSetFlagsFrom A v
   return Next
 
@@ -585,7 +585,7 @@ subWithCarry cin v1 v2 = do
   v2comp <- Complement v2
   (v,cout) <- AddWithCarry cin' v1 v2comp
   aux <- addForAuxCarry cin' v1 v2comp
-  SetFlag Cpu.FlagA aux
+  SetFlag Cpu.HF aux
   borrow <- Flip cout
   return (v, borrow)
 
@@ -620,9 +620,9 @@ setFlagsFrom value = do
   s <- IsSigned value
   z <- IsZero value
   p <- IsParity value
-  SetFlag Cpu.FlagS s
-  SetFlag Cpu.FlagZ z
-  SetFlag Cpu.FlagP p
+  SetFlag Cpu.SF s
+  SetFlag Cpu.ZF z
+  SetFlag Cpu.PF p
   -- TODO: properly set the new flags (X,Y,N)
   false <- MakeBit False
   SetFlag Cpu.XF false
@@ -703,28 +703,28 @@ expandRegPair = \case
   DE -> Left $ HiLo {hi = Cpu.D, lo = Cpu.E}
   HL -> Right Cpu.HL
   SP -> Right Cpu.SP
-  PSW -> Left $ HiLo {hi = Cpu.A, lo = Cpu.Flags}
+  PSW -> Left $ HiLo {hi = Cpu.A, lo = Cpu.F}
 
 setRegOrFlags :: Reg -> Byte p -> Eff p ()
 setRegOrFlags r v = case r of
-  Cpu.Flags -> do
-    TestBit v 7 >>= SetFlag Cpu.FlagS
-    TestBit v 6 >>= SetFlag Cpu.FlagZ
-    TestBit v 4 >>= SetFlag Cpu.FlagA
-    TestBit v 2 >>= SetFlag Cpu.FlagP
-    TestBit v 0 >>= SetFlag Cpu.FlagCY
+  {-Cpu.F -> do
+    TestBit v 7 >>= SetFlag Cpu.SF
+    TestBit v 6 >>= SetFlag Cpu.ZF
+    TestBit v 4 >>= SetFlag Cpu.HF
+    TestBit v 2 >>= SetFlag Cpu.PF
+    TestBit v 0 >>= SetFlag Cpu.CF-}
   reg ->
     SetReg reg v
 
 getRegOrFlags :: Reg -> Eff p (Byte p)
 getRegOrFlags = \case
-  Cpu.Flags -> do
+  {-Cpu.F -> do
     x <- MakeByte 0x2
-    x <- GetFlag Cpu.FlagS >>= UpdateBit x 7
-    x <- GetFlag Cpu.FlagZ >>= UpdateBit x 6
-    x <- GetFlag Cpu.FlagA >>= UpdateBit x 4
-    x <- GetFlag Cpu.FlagP >>= UpdateBit x 2
-    x <- GetFlag Cpu.FlagCY >>= UpdateBit x 0
-    return x
+    x <- GetFlag Cpu.SF >>= UpdateBit x 7
+    x <- GetFlag Cpu.ZF >>= UpdateBit x 6
+    x <- GetFlag Cpu.HF >>= UpdateBit x 4
+    x <- GetFlag Cpu.PF >>= UpdateBit x 2
+    x <- GetFlag Cpu.CF >>= UpdateBit x 0
+    return x-}
   reg ->
     GetReg reg
