@@ -160,7 +160,7 @@ emulateS CB{traceState} semantics _buttons s0 = do
 
       Trace -> do
         traceState s
-        k s ()
+        k s { icount = icount s + 1 } ()
 
       {-TraceInstruction i -> do
         case traceI of
@@ -230,8 +230,10 @@ prettyPrefix s message = do
   unwords [ prettyTicks s , show pc , ":", message ]
 
 advance :: Ticks -> EmuState -> EmuState
-advance n s@EmuState{icount,ticks} =
-  s { icount = icount + 1, ticks = ticks + n }
+advance n s@EmuState{icount=_,ticks} =
+  s { --icount = icount + 1
+      ticks = ticks + n
+    }
 
 {-
 halfFrameTicks :: Ticks
