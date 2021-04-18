@@ -16,7 +16,7 @@ emu = do
 
 traceConf :: TraceConf
 traceConf = TraceConf
-  { stopAfter = Just 20
+  { stopAfter = Just 100
   , iPeriod = 1
   , showPixs = False
   }

@@ -56,12 +56,12 @@ traceEmulate handle TraceConf{stopAfter,iPeriod,showPixs=_} = do
     buttons0 = ()
 
 traceLine :: EmuState -> String -- TODO: make this show of EmuState
-traceLine s@EmuState{ticks,icount,mem} = do
+traceLine s@EmuState{ticks,icount=_,mem} = do
   unwords
-    [ show s
-    , "(" ++ unwords [ show b | a <- take 4 [programCounter s ..], let b = Mem.read mem a ] ++ "),"
-    , printf "cyc: %s," (show ticks)
-    , printf "(%d)" icount
+    [ printf "cyc: %3s, " (show ticks)
+    , show s
+    , "(" ++ unwords [ show b | a <- take 4 [programCounter s ..], let b = Mem.read mem a ] ++ ")"
+    --, printf "(%d)" icount
     ]
 
 
