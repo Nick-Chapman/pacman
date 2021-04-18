@@ -12,7 +12,7 @@ module SlowEmulate (
 import Addr (Addr(..),addCarryOut)
 --import Buttons (Buttons)
 import Byte (Byte(..),addWithCarry)
-import Cpu (Cpu,Reg(PCL,PCH))
+import Cpu (Cpu,Reg(PCL,PCH),flagBitPos)
 import Data.Bits
 import Effect (Eff(..))
 import HiLo (HiLo(..))
@@ -26,14 +26,14 @@ import Text.Printf (printf)
 import qualified Addr (fromHiLo,toHiLo,bump)
 --import qualified Buttons (get)
 import qualified Byte (toUnsigned)
-import qualified Cpu (init,get16,set16,get,set,getFlag,setFlag)
+import qualified Cpu (init,get16,set16,get,set) --,getFlag,setFlag)
 import qualified Mem (init,readIO,writeIO)
 import qualified Phase (Byte,Addr,Bit)
 import qualified Semantics (fetchDecodeExec) --,decodeExec)
 --import qualified Shifter (init,get,set)
 --import qualified Sounds (Playing,initPlaying)
 
---import qualified Cpu (Reg(A))
+import qualified Cpu (Reg(Flags))
 
 
 type Buttons = ()
@@ -136,8 +136,21 @@ emulateS CB{traceState} semantics _buttons s0 = do
       SetReg16 rr a -> k s { cpu = Cpu.set16 cpu rr a} ()
       GetReg r -> k s (Cpu.get cpu r)
       SetReg r b -> k s { cpu = Cpu.set cpu r b} ()
-      GetFlag flag -> k s (Cpu.getFlag cpu flag)
-      SetFlag flag bit -> k s { cpu = Cpu.setFlag cpu flag bit} ()
+
+      --GetFlag flag -> k s (Cpu.getFlag cpu flag)
+      --SetFlag flag bit -> k s { cpu = Cpu.setFlag cpu flag bit} ()
+
+      GetFlag flag -> do
+        let byte = Cpu.get cpu Cpu.Flags
+        let pos = flagBitPos flag
+        let bit = Bit (byte `testBit` pos)
+        k s bit
+
+      SetFlag flag (Bit bool) -> do
+        let byte = Cpu.get cpu Cpu.Flags
+        let pos = flagBitPos flag
+        let byte' = (if bool then setBit else clearBit) byte pos
+        k s { cpu = Cpu.set cpu Cpu.Flags byte' } ()
 
       --GetShifterReg r -> k s (Shifter.get shifter r)
       --SetShifterReg r b -> k s { shifter = Shifter.set shifter r b} ()

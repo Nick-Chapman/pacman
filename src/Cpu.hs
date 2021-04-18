@@ -4,8 +4,9 @@ module Cpu (
   init,
   get16,set16,
   get,set,
-  getFlag,setFlag,
-  kindOfMap,
+  flagBitPos,
+--  getFlag,setFlag,
+--  kindOfMap,
   ) where
 
 import Prelude hiding (init)
@@ -33,11 +34,11 @@ data Cpu p = Cpu
   , regE :: Byte p
   , regF :: Byte p -- TODO: amalgamated flags
   , regI :: Byte p -- TODO: interrupt vector
-  , flagS :: Bit p
+{-  , flagS :: Bit p
   , flagZ :: Bit p
   , flagA :: Bit p
   , flagP :: Bit p
-  , flagCY :: Bit p
+  , flagCY :: Bit p -}
   }
 
 instance (Show (Addr p), Show (Bit p), Show (Byte p)) => Show (Cpu p) where
@@ -61,17 +62,17 @@ instance (Show (Addr p), Show (Bit p), Show (Byte p)) => Show (Cpu p) where
 
 
 init :: Addr p -> Addr p -> Byte p -> Byte p -> Bit p -> Cpu p
-init addr0 aFF b bFF bit0 =
+init addr0 aFF b bFF _bit0 =
   Cpu { pch = b, pcl = b
       , sp = aFF
       , hl = addr0
       , regA = bFF, regF = bFF
       , regB = b, regC = b, regD = b, regE = b
       , regI = b
-      , flagS = bit0, flagZ = bit0, flagA = bit0, flagP = bit0, flagCY = bit0
+--      , flagS = bit0, flagZ = bit0, flagA = bit0, flagP = bit0, flagCY = bit0
       }
 
-
+{-
 getFlag :: Cpu p -> Flag -> Bit p
 getFlag Cpu{flagS,flagZ,flagA,flagP,flagCY} = \case
   FlagS -> flagS
@@ -87,10 +88,18 @@ setFlag cpu flag x = case flag of
   FlagA -> cpu { flagA = x }
   FlagP -> cpu { flagP = x }
   FlagCY -> cpu { flagCY = x }
+-}
 
+flagBitPos :: Flag -> Int
+flagBitPos = \case
+  FlagS -> 7
+  FlagZ -> 6
+  FlagA -> 4
+  FlagP -> 2
+  FlagCY -> 0
 
 get :: Cpu p -> Reg -> Byte p
-get Cpu{pch,pcl,regA,regB,regC,regD,regE,regI} = \case
+get Cpu{pch,pcl,regA,regB,regC,regD,regE,regI,regF} = \case
   PCH -> pch
   PCL -> pcl
   A -> regA
@@ -98,7 +107,7 @@ get Cpu{pch,pcl,regA,regB,regC,regD,regE,regI} = \case
   C -> regC
   D -> regD
   E -> regE
-  Flags -> error "Cpu.get Flags"
+  Flags -> regF -- error "Cpu.get Flags"
   I -> regI
 
 set :: Cpu p -> Reg -> Byte p -> Cpu p
@@ -110,7 +119,7 @@ set cpu r x = case r of
   C -> cpu { regC = x }
   D -> cpu { regD = x }
   E -> cpu { regE = x }
-  Flags -> error "Cpu.set Flags"
+  Flags -> cpu { regF = x } --error "Cpu.set Flags"
   I -> cpu { regI = x }
 
 
@@ -125,12 +134,14 @@ set16 cpu rr a = case rr of
   HL -> cpu { hl = a }
 
 
+{-
 kindOfMap :: (Addr a -> Addr b) -> (Byte a -> Byte b) -> (Bit a -> Bit b) -> Cpu a -> Cpu b
 kindOfMap af f g = \case
   Cpu{pch,pcl
      ,sp,hl
      ,regA,regB,regC,regD,regE,regF,regI
-     ,flagS,flagZ,flagA,flagP,flagCY} ->
+--     ,flagS,flagZ,flagA,flagP,flagCY
+     } ->
     Cpu { pch = f pch
         , pcl = f pcl
         , sp = af sp
@@ -142,9 +153,10 @@ kindOfMap af f g = \case
         , regE = f regE
         , regF = f regF
         , regI = f regI
-        , flagS = g flagS
+{-        , flagS = g flagS
         , flagZ = g flagZ
         , flagA = g flagA
         , flagP = g flagP
-        , flagCY = g flagCY
+        , flagCY = g flagCY -}
         }
+-}
