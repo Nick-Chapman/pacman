@@ -98,17 +98,17 @@ execute0 = \case
     v0 <- load reg
     cin <- MakeBit True
     zero <- MakeByte 0
-    (v,_coutIgnored) <- AddWithCarry cin v0 zero
+    (v,cout) <- AddWithCarry cin v0 zero
     aux <- addForAuxCarry cin v0 zero
     SetFlag Cpu.HF aux
-    saveAndSetFlagsFrom reg v
+    saveAndSetFlagsFrom reg cout v
     return Next
   DCR reg -> do
     v0 <- load reg
     cin <- MakeBit True
     zero <- MakeByte 0
-    (v,_) <- subWithCarry cin v0 zero
-    saveAndSetFlagsFrom reg v
+    (v,borrow) <- subWithCarry cin v0 zero
+    saveAndSetFlagsFrom reg borrow v
     return Next
   RLC -> do
     byte <- load A
@@ -137,7 +137,7 @@ execute0 = \case
     SetFlag Cpu.HF auxOut
     SetFlag Cpu.CF cout
     save A byteOut
-    setFlagsFrom byteOut
+    setFlagsFrom cout byteOut -- TODO: cout used for CF and PF ?
     return Next
   STC -> do
     bit <- MakeBit True
@@ -227,7 +227,7 @@ execute0 = \case
     v1 <- load A
     v2 <- load reg
     (v,borrow) <- subtract v1 v2
-    setFlagsFrom v
+    setFlagsFrom borrow v
     SetFlag Cpu.CF borrow
     return Next
   RCond cond -> do
@@ -452,7 +452,7 @@ execute1 op1 b1 = case op1 of
   CPI -> do
     b <- load A
     (v,borrow) <- subtract b b1
-    setFlagsFrom v
+    setFlagsFrom borrow v
     SetFlag Cpu.CF borrow
     return Next
   DJNZ -> do
@@ -480,7 +480,8 @@ binop
 binop f b1 = do
   v0 <- load A
   v <- f b1 v0
-  saveAndSetFlagsFrom A v
+  p <- IsParity v
+  saveAndSetFlagsFrom A p v
   resetCarry
   resetAux
   return Next
@@ -491,7 +492,8 @@ andA
 andA b1 = do
   v0 <- load A
   v <- AndB b1 v0
-  saveAndSetFlagsFrom A v
+  p <- IsParity v
+  saveAndSetFlagsFrom A p v
   resetCarry
   w <- OrB b1 v0
   aux <- TestBit w 3
@@ -561,7 +563,7 @@ addToAccWithCarry cin v1 = do
   aux <- addForAuxCarry cin v1 v2
   SetFlag Cpu.HF aux
   SetFlag Cpu.CF cout
-  saveAndSetFlagsFrom A v
+  saveAndSetFlagsFrom A cout v
   return Next
 
 
@@ -570,7 +572,7 @@ subToAccWithCarry cin v2 = do
   v1 <- load A
   (v,cout) <- subWithCarry cin v1 v2
   SetFlag Cpu.CF cout
-  saveAndSetFlagsFrom A v
+  saveAndSetFlagsFrom A cout v
   return Next
 
 
@@ -610,16 +612,17 @@ call a = do
   return (Jump a)
 
 
-saveAndSetFlagsFrom :: RegSpec -> Byte p -> Eff p ()
-saveAndSetFlagsFrom reg v = do
+saveAndSetFlagsFrom :: RegSpec -> Bit p -> Byte p -> Eff p ()
+saveAndSetFlagsFrom reg overflow v = do
   save reg v
-  setFlagsFrom v
+  setFlagsFrom overflow v
 
-setFlagsFrom :: Byte p -> Eff p ()
-setFlagsFrom value = do
+setFlagsFrom :: Bit p -> Byte p -> Eff p ()
+setFlagsFrom overflow value = do
   s <- IsSigned value
   z <- IsZero value
-  p <- IsParity value
+  _p <- IsParity value
+  let p = overflow
   SetFlag Cpu.SF s
   SetFlag Cpu.ZF z
   SetFlag Cpu.PF p
