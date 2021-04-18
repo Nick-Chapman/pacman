@@ -13,7 +13,7 @@ import Cpu (Cpu,Reg(PCL,PCH,F),flagBitPos)
 import Data.Bits
 import Effect (Eff(..))
 import HiLo (HiLo(..))
-import InstructionSet (decode,decodeAfterED)
+import InstructionSet (decode,decodeAfterED,dis1)
 import Mem (Mem)
 import Phase (Phase)
 import Text.Printf (printf)
@@ -49,12 +49,16 @@ data EmuState = EmuState
   }
 
 instance Show EmuState where
-  show EmuState{ticks,cpu,mem} = do
+  show s@EmuState{ticks,cpu} = do
     unwords
       [ printf "cyc: %3s, " (show ticks)
       , show cpu
-      , "(" ++ unwords [ show b | a <- take 4 [programCounter cpu ..], let b = Mem.read mem a ] ++ ")"
+      , "(" ++ unwords [ show b | b <- take 4 (pcBytes s) ] ++ ")"
+      , show (dis1 (pcBytes s))
       ]
+
+pcBytes :: EmuState -> [Byte]
+pcBytes EmuState{cpu,mem} = [ Mem.read mem a | a <- [programCounter cpu ..] ]
 
 programCounter :: Cpu EmuTime -> Addr
 programCounter cpu = do

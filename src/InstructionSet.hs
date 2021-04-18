@@ -5,7 +5,8 @@ module InstructionSet (
   cycles,
   decodeAfterED,
   decode,
-  theDecodeTable
+  theDecodeTable,
+  dis1
   ) where
 
 import Byte (Byte(..))
@@ -352,3 +353,12 @@ instance Show ImmSpec where
   show = \case
     B1 -> "b1"
     B2 -> "b2"
+
+dis1 :: [Byte] -> Op
+dis1 = \case
+  b0:b1:_ ->
+    case decode b0 of
+      Left PrefixED -> decodeAfterED b1
+      Right op -> op
+  _ ->
+    error "dis1"
