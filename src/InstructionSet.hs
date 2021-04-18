@@ -4,9 +4,9 @@ module InstructionSet (
   Instruction(..), justOp,
   cycles,
   decodeAfterED,
-  decode, encode,
-  prettyInstructionBytes,
-  theDecodeTable
+  decode, --encode,
+  --prettyInstructionBytes,
+  --theDecodeTable
   ) where
 
 import Byte (Byte(..))
@@ -208,11 +208,12 @@ data Instruction b -- op+args
   = Ins0 Op0
   | Ins1 Op1 b
   | Ins2 Op2 b b
-  deriving (Functor)
+  deriving (Functor,Show)
 
-instance Show b => Show (Instruction b) where
-  show i = prettyInstruction i
+{-instance Show b => Show (Instruction b) where
+  show i = prettyInstruction i-}
 
+{-
 prettyInstructionBytes :: Show b => Instruction b -> String
 prettyInstructionBytes i = unwords bytes
   where
@@ -293,6 +294,7 @@ prettyReg :: RegSpec -> String
 prettyReg = \case
   M -> "(HL)"
   reg -> show reg
+-}
 
 ljust :: Int -> String -> String
 ljust n s = s <> take (max 0 (n - length s)) (repeat ' ')
