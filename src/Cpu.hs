@@ -47,8 +47,8 @@ instance (Show (Addr p), Show (Bit p), Show (Byte p)) => Show (Cpu p) where
       ]
     ]
 
-init :: Addr p -> Addr p -> Byte p -> Byte p -> Bit p -> Cpu p
-init addr0 aFF b bFF _bit0 =
+init :: Addr p -> Addr p -> Byte p -> Byte p -> Cpu p
+init addr0 aFF b bFF =
   Cpu { pch = b, pcl = b
       , sp = aFF
       , hl = addr0

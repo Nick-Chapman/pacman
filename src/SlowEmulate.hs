@@ -1,50 +1,34 @@
 
 module SlowEmulate (
   Ticks(..),
---  prettyPrefix,
   EmuState(..), initState,
-  programCounter,
   CB(..),
   emulate,
   Bit(..),
   ) where
 
 import Addr (Addr(..),addCarryOut)
---import Buttons (Buttons)
-import Byte (Byte(..),addWithCarry)
-import Cpu (Cpu,Reg(PCL,PCH),flagBitPos)
+import Byte (Byte(..),addWithCarry,parity)
+import Cpu (Cpu,Reg(PCL,PCH,F),flagBitPos)
 import Data.Bits
 import Effect (Eff(..))
 import HiLo (HiLo(..))
-import InstructionSet (decode,decodeAfterED) --Instruction,decode)
+import InstructionSet (decode,decodeAfterED)
 import Mem (Mem)
 import Phase (Phase)
---import Rom (Rom)
---import Shifter (Shifter)
---import Sounds (soundControl)
 import Text.Printf (printf)
 import qualified Addr (fromHiLo,toHiLo,bump)
---import qualified Buttons (get)
 import qualified Byte (toUnsigned)
-import qualified Cpu (init,get16,set16,get,set) --,getFlag,setFlag)
+import qualified Cpu (init,get16,set16,get,set)
 import qualified Mem (init,readIO,writeIO)
+import qualified Mem (read)
 import qualified Phase (Byte,Addr,Bit)
-import qualified Semantics (fetchDecodeExec) --,decodeExec)
---import qualified Shifter (init,get,set)
---import qualified Sounds (Playing,initPlaying)
-
-import qualified Cpu (Reg(F))
-
-
-type Buttons = ()
-
+import qualified Semantics (fetchDecodeExec)
 
 -- | Clock ticks
 newtype Ticks = Ticks { unTicks :: Int } deriving (Eq,Ord,Num)
 
---instance Show Ticks where show = printf "[%08d]" . unTicks
 instance Show Ticks where show = printf "%d" . unTicks
-
 
 data EmuTime -- At Emulation type we have concrete Bytes
 
@@ -53,22 +37,30 @@ instance Phase EmuTime where
   type Addr EmuTime = Addr
   type Bit EmuTime = Bit
 
-
 newtype Bit = Bit Bool
-
 instance Show Bit where show (Bit b) = if b then "1" else "0"
 
-
 data EmuState = EmuState
-  { ticks :: Ticks -- cycle count
-  , icount :: Int -- instruction count
+  { ticks :: Ticks -- cycle count -- TODO: move inside cpu
+  , icount :: Int -- instruction count -- KILL
   , cpu :: Cpu EmuTime
   , mem :: Mem
-  , interrupts_enabled :: Bool
---  , nextWakeup :: Ticks
---  , shifter :: Shifter EmuTime
---  , playing :: Sounds.Playing
+  , interrupts_enabled :: Bool -- TODO: move inside cpu
   }
+
+instance Show EmuState where
+  show EmuState{ticks,cpu,mem} = do
+    unwords
+      [ printf "cyc: %3s, " (show ticks)
+      , show cpu
+      , "(" ++ unwords [ show b | a <- take 4 [programCounter cpu ..], let b = Mem.read mem a ] ++ ")"
+      ]
+
+programCounter :: Cpu EmuTime -> Addr
+programCounter cpu = do
+  let lo = Cpu.get cpu PCL
+  let hi = Cpu.get cpu PCH
+  Addr.fromHiLo HiLo{hi,lo}
 
 initState :: IO EmuState
 initState = do
@@ -79,56 +71,19 @@ initState = do
     , cpu = cpu0
     , mem
     , interrupts_enabled = False
-
---    , nextWakeup = halfFrameTicks
-    --  , shifter = Shifter.init (Byte 0)
-    --  , playing = Sounds.initPlaying
     }
 
-
 cpu0 :: Cpu EmuTime
-cpu0 =
-  Cpu.init (Addr 0) (Addr 0xFFFF) (Byte 0) (Byte 0xFF) (Bit False)
+cpu0 = Cpu.init (Addr 0) (Addr 0xFFFF) (Byte 0) (Byte 0xFF)
 
+data CB = CB { trace :: EmuState -> IO () }
 
-instance Show EmuState where
-  show EmuState{cpu} =
-    unwords [ show cpu
-            -- , show shifter
-            ]
-
-
-data CB = CB
-  { -- traceI :: Maybe (EmuState -> Instruction Byte -> IO ())
-    traceState :: EmuState -> IO ()
-  }
-
-emulate :: CB -> Buttons -> EmuState -> IO EmuState
-emulate cb buttons s@EmuState{interrupts_enabled=_IGNORED} = do
-{-  case timeToWakeup s of
-    Just s
-      | interrupts_enabled -> do
-          let s2 = s { interrupts_enabled = False }
-          let byte = interruptInstruction s2
-          emulateS cb (Semantics.decodeExec byte) buttons s2
-      | otherwise ->
-        emulateS cb Semantics.fetchDecodeExec buttons s
-    Nothing ->-}
-      emulateS cb Semantics.fetchDecodeExec buttons s
-
-
-emulateS :: CB -> Eff EmuTime () -> Buttons -> EmuState -> IO EmuState
-emulateS CB{traceState} semantics _buttons s0 = do
-  run s0 semantics $ \post () -> do
-    return post
-
+emulate :: CB -> EmuState -> IO EmuState
+emulate CB{trace} s0 = do
+  run s0 Semantics.fetchDecodeExec $ \post () -> return post
   where
-
-    crash :: String -> a
-    crash message = do error ("*crash*\n" <> prettyPrefix s0 message)
-
     run :: EmuState -> Eff EmuTime a -> (EmuState -> a -> IO EmuState) -> IO EmuState
-    run s@EmuState{cpu,mem} eff k = case eff of
+    run s@EmuState{ticks,cpu,mem} eff k = case eff of
       Ret x -> k s x
       Bind eff f -> run s eff $ \s a -> run s (f a) k
 
@@ -137,51 +92,28 @@ emulateS CB{traceState} semantics _buttons s0 = do
       GetReg r -> k s (Cpu.get cpu r)
       SetReg r b -> k s { cpu = Cpu.set cpu r b} ()
 
-      --GetFlag flag -> k s (Cpu.getFlag cpu flag)
-      --SetFlag flag bit -> k s { cpu = Cpu.setFlag cpu flag bit} ()
-
-      GetFlag flag -> do -- TODO: move in Semantics; remove as effect
-        let byte = Cpu.get cpu Cpu.F
+      GetFlag flag -> do -- TODO: move into Semantics; remove as effect
+        let byte = Cpu.get cpu F
         let pos = flagBitPos flag
         let bit = Bit (byte `testBit` pos)
         k s bit
 
-      SetFlag flag (Bit bool) -> do -- TODO: move in Semantics; remove as effect
-        let byte = Cpu.get cpu Cpu.F
+      SetFlag flag (Bit bool) -> do -- TODO: move into Semantics; remove as effect
+        let byte = Cpu.get cpu F
         let pos = flagBitPos flag
         let byte' = (if bool then setBit else clearBit) byte pos
-        k s { cpu = Cpu.set cpu Cpu.F byte' } ()
+        k s { cpu = Cpu.set cpu F byte' } ()
 
-      --GetShifterReg r -> k s (Shifter.get shifter r)
-      --SetShifterReg r b -> k s { shifter = Shifter.set shifter r b} ()
-
-      ReadMem a -> do
-        b <- Mem.readIO mem a
-        k s b
-
-      WriteMem a b -> do
-        mem <- Mem.writeIO mem a b
-        k s { mem } ()
+      ReadMem a -> do b <- Mem.readIO mem a; k s b
+      WriteMem a b -> do mem <- Mem.writeIO mem a b; k s { mem } ()
 
       EnableInterrupts -> k s { interrupts_enabled = True } ()
       DisableInterrupts -> k s { interrupts_enabled = False } ()
-
       Decode byte -> k s (decode byte)
       DecodeAfterED byte -> k s (decodeAfterED byte)
-
       MarkReturnAddress {} -> k s ()
-
-      Trace -> do
-        traceState s
-        k s { icount = icount s + 1 } ()
-
-      {-TraceInstruction i -> do
-        case traceI of
-          Nothing -> return ()
-          Just tr -> tr s i
-        k s () -}
-
-      Advance n -> k (advance (Ticks n) s) ()
+      Trace -> do trace s; k s { icount = icount s + 1 } ()
+      Advance n -> k s { ticks = ticks + fromIntegral n } ()
 
       MakeBit (bool) -> k s (Bit bool)
       Flip (Bit bool) -> k s (Bit (not bool))
@@ -202,7 +134,7 @@ emulateS CB{traceState} semantics _buttons s0 = do
         k s (v, Bit cout)
       IsSigned byte -> k s (Bit (byte `testBit` 7))
       IsZero byte -> k s (Bit (byte == 0))
-      IsParity byte -> do k s (Bit (parity  byte))
+      IsParity byte -> do k s (Bit (Byte.parity  byte))
       TestBit byte i -> k s (Bit (byte `testBit` i))
       UpdateBit byte i (Bit bool) -> k s ((if bool then setBit else clearBit) byte i)
       CaseByte (Byte word) _choices -> k s word
@@ -213,59 +145,3 @@ emulateS CB{traceState} semantics _buttons s0 = do
       Add16 w1 w2 -> do
         let (w, cout) = Addr.addCarryOut w1 w2
         k s (w, Bit cout)
-
-      UnknownInput n -> crash $ "unknown input: " ++ show n
-      UnknownOutput 6 _ -> k s () -- ignore watchdog
-      UnknownOutput n b -> crash $ "unknown output: " ++ show (n,b)
-      --GetButton but -> k s (Bit (Buttons.get but buttons))
-      --SoundControl sound (Bit bool) -> k s { playing = soundControl bool playing sound } ()
-
-
-parity :: Byte -> Bool
-parity byte = length [ () | i <- [0..7], byte `testBit` i ] `mod` 2 == 0
-
-prettyTicks :: EmuState -> String
-prettyTicks EmuState{ticks,icount} =
-  unwords [ printf "%8d" icount, rjust 11 (show ticks) ]
-
-rjust :: Int -> String -> String
-rjust n s = take (max 0 (n - length s)) (repeat ' ') <> s
-
-programCounter :: EmuState -> Addr
-programCounter EmuState{cpu} = do
-  let lo = Cpu.get cpu PCL
-  let hi = Cpu.get cpu PCH
-  Addr.fromHiLo HiLo{hi,lo}
-
-prettyPrefix :: EmuState -> String -> String
-prettyPrefix s message = do
-  let pc = programCounter s
-  unwords [ prettyTicks s , show pc , ":", message ]
-
-advance :: Ticks -> EmuState -> EmuState
-advance n s@EmuState{icount=_,ticks} =
-  s { --icount = icount + 1
-      ticks = ticks + n
-    }
-
-{-
-halfFrameTicks :: Ticks
-halfFrameTicks = Ticks (2000000 `div` 120) - n -- Experiment with reducing this value.
-  -- turns out that even a reduction of just 1000 cycles
-  -- will cause the game to hang after the "P" of "PLAY" is displayed
-  where n = 0 --1000
-
-interruptInstruction :: EmuState -> Byte
-interruptInstruction EmuState{ticks} = do
-  let mid = (unTicks ticks `div` unTicks halfFrameTicks) `mod` 2 == 1
-  if mid then 0xCF else 0xD7
-
-timeToWakeup :: EmuState -> Maybe EmuState
-timeToWakeup s@EmuState{ticks,nextWakeup} = do
-  if ticks < nextWakeup
-    then Nothing
-    else do
-    Just s { nextWakeup =
-             Ticks ((unTicks ticks `div` unTicks halfFrameTicks) + 1) * halfFrameTicks
-           }
--}

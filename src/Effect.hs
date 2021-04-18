@@ -3,16 +3,12 @@ module Effect (Eff(..)) where
 
 import Control.Monad (ap,liftM)
 import Data.Word8 (Word8)
-
---import Buttons (But)
 import Cpu (Reg16,Reg,Flag)
 import HiLo (HiLo(..))
-import InstructionSet (Prefix,Op) --,Instruction)
+import InstructionSet (Prefix,Op)
 import Phase (Byte,Addr,Bit)
---import Sounds (Sound)
---import qualified Shifter
 
--- | The Effect type, constructed when executing instructions
+-- | The Effect type, constructed by Semantics
 
 data Eff p a where
   Ret :: a -> Eff p a
@@ -28,9 +24,6 @@ data Eff p a where
   ReadMem :: Addr p -> Eff p (Byte p)
   WriteMem :: Addr p -> Byte p -> Eff p ()
 
-  --GetShifterReg :: Shifter.Reg -> Eff p (Byte p)
-  --SetShifterReg :: Shifter.Reg -> Byte p -> Eff p ()
-
   EnableInterrupts :: Eff p ()
   DisableInterrupts :: Eff p ()
 
@@ -38,7 +31,6 @@ data Eff p a where
   DecodeAfterED :: Byte p -> Eff p Op
 
   Trace :: Eff p ()
-  --TraceInstruction :: Instruction (Byte p) -> Eff p ()
   Advance :: Int -> Eff p ()
   MarkReturnAddress :: Addr p -> Eff p ()
 
@@ -68,12 +60,6 @@ data Eff p a where
   SplitAddr :: Addr p -> Eff p (HiLo (Byte p))
   OffsetAddr :: Int -> Addr p -> Eff p (Addr p)
   Add16 :: Addr p -> Addr p -> Eff p (Addr p, Bit p)
-
-  UnknownInput :: Word8 -> Eff p (Byte p)
-  UnknownOutput :: Word8 -> Byte p -> Eff p ()
-  --GetButton :: But -> Eff p (Bit p)
-  --SoundControl :: Sound -> Bit p -> Eff p ()
-
 
 instance Functor (Eff p) where fmap = liftM
 instance Applicative (Eff p) where pure = return; (<*>) = ap

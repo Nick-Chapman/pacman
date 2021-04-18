@@ -4,6 +4,7 @@ module Byte(
   toUnsigned,
   ofUnsigned,
   addWithCarry,
+  parity
   ) where
 
 import Data.Bits
@@ -25,3 +26,6 @@ addWithCarry :: Bool -> Byte -> Byte -> (Byte,Bool)
 addWithCarry cin x y = (ofUnsigned res, cout) where
     res :: Int = toUnsigned x + toUnsigned y + (if cin then 1 else 0)
     cout = res >= 256
+
+parity :: Byte -> Bool
+parity byte = length [ () | i <- [0..7], byte `testBit` i ] `mod` 2 == 0
