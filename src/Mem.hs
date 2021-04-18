@@ -23,7 +23,7 @@ init = do
   rom6f <- Rom.load 4096 "roms/pacman.6f"
   rom6h <- Rom.load 4096 "roms/pacman.6h"
   -- TODO: rom6j
-  let ram = Ram.init (4 * 1024)
+  let ram = Ram.init (4 * 1024 + 256)
   pure $ Mem { rom6e, rom6f, rom6h, ram }
 
 read :: Mem -> Addr -> Byte
@@ -46,7 +46,7 @@ write mem@Mem{ram} a b = if
 
 startRam,endRam :: Addr
 startRam = 0x4000
-endRam = 0x5000
+endRam = 0x5100
 
 writeIO :: Mem -> Addr -> Byte -> IO Mem
 writeIO m a b = do
