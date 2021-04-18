@@ -3,8 +3,8 @@
 
 module Semantics
   ( fetchDecodeExec
-  , decodeExec
-  , execInstruction
+  -- , decodeExec
+  --, execInstruction
   ) where
 
 import Prelude hiding (subtract)
@@ -12,7 +12,7 @@ import Prelude hiding (subtract)
 import Cpu (Reg16,Reg)
 import Effect (Eff(..))
 import HiLo (HiLo(..))
-import InstructionSet (Op(..),Instruction(..),Op0(..),Op1(..),Op2(..),RegPairSpec(..),Condition(..),cycles,justOp)
+import InstructionSet (Prefix(..),Op(..),Instruction(..),Op0(..),Op1(..),Op2(..),RegPairSpec(..),Condition(..),cycles,justOp)
 import Phase (Addr,Byte,Bit)
 import qualified Cpu
 --import qualified Ports (inputPort,outputPort)
@@ -23,14 +23,30 @@ import InstructionSet (RegSpec(..))
 fetchDecodeExec :: Eff p ()
 fetchDecodeExec = do
   Trace
-  byte <- fetch
-  decodeExec byte
+  op <- fetchOp
+  i <- fetchImmediates op
+  execInstruction i
 
-decodeExec :: Byte p -> Eff p ()
-decodeExec byte = do
-  op <- Decode byte
-  instruction <- fetchImmediates op
-  execInstruction instruction
+fetchOp :: Eff p Op
+fetchOp = do
+  byte <- fetch
+  Decode byte >>= \case
+    Left PrefixED -> do
+      byte2 <- fetch
+      DecodeAfterED byte2
+    Right op -> do
+      pure op
+
+fetchImmediates :: Op -> Eff p (Instruction (Byte p))
+fetchImmediates = \case
+  Op0 op0 -> return (Ins0 op0)
+  Op1 op1 -> do
+    b1 <- fetch
+    return (Ins1 op1 b1)
+  Op2 op2 -> do
+    b1 <- fetch
+    b2 <- fetch
+    return (Ins2 op2 b1 b2)
 
 execInstruction :: Instruction (Byte p) -> Eff p ()
 execInstruction instruction = do
@@ -50,16 +66,6 @@ fetch = do
   OffsetAddr 1 pc >>= setPC
   return byte
 
-fetchImmediates :: Op -> Eff p (Instruction (Byte p))
-fetchImmediates = \case
-  Op0 op0 -> return (Ins0 op0)
-  Op1 op1 -> do
-    b1 <- fetch
-    return (Ins1 op1 b1)
-  Op2 op2 -> do
-    b1 <- fetch
-    b2 <- fetch
-    return (Ins2 op2 b1 b2)
 
 data Flow p = Next | Jump (Addr p)
 
@@ -383,6 +389,7 @@ load = \case
   H -> load16hi HL
   L -> load16lo HL
   M -> load16 HL >>= ReadMem
+  I -> GetReg Cpu.I
 
 load16hi :: RegPairSpec -> Eff p (Byte p)
 load16hi rr = do
@@ -406,6 +413,7 @@ save = \case
   H -> save16hi HL
   L -> save16lo HL
   M -> \b -> do a <- load16 HL; WriteMem a b
+  I -> SetReg Cpu.I
 
 execute1 :: Op1 -> Byte p -> Eff p (Flow p)
 execute1 op1 b1 = case op1 of

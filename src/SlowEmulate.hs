@@ -16,7 +16,7 @@ import Cpu (Cpu,Reg(PCL,PCH))
 import Data.Bits
 import Effect (Eff(..))
 import HiLo (HiLo(..))
-import InstructionSet (decode) --Instruction,decode)
+import InstructionSet (decode,decodeAfterED) --Instruction,decode)
 import Mem (Mem)
 import Phase (Phase)
 --import Rom (Rom)
@@ -154,6 +154,8 @@ emulateS CB{traceState} semantics _buttons s0 = do
       DisableInterrupts -> k s { interrupts_enabled = False } ()
 
       Decode byte -> k s (decode byte)
+      DecodeAfterED byte -> k s (decodeAfterED byte)
+
       MarkReturnAddress {} -> k s ()
 
       Trace -> do

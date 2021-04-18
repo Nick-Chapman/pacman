@@ -7,7 +7,7 @@ import Data.Word8 (Word8)
 --import Buttons (But)
 import Cpu (Reg16,Reg,Flag)
 import HiLo (HiLo(..))
-import InstructionSet (Op) --,Instruction)
+import InstructionSet (Prefix,Op) --,Instruction)
 import Phase (Byte,Addr,Bit)
 --import Sounds (Sound)
 --import qualified Shifter
@@ -34,7 +34,9 @@ data Eff p a where
   EnableInterrupts :: Eff p ()
   DisableInterrupts :: Eff p ()
 
-  Decode :: Byte p -> Eff p Op
+  Decode :: Byte p -> Eff p (Either Prefix Op)
+  DecodeAfterED :: Byte p -> Eff p Op
+
   Trace :: Eff p ()
   --TraceInstruction :: Instruction (Byte p) -> Eff p ()
   Advance :: Int -> Eff p ()

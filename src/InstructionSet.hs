@@ -1,8 +1,9 @@
 
 module InstructionSet (
-  Op(..),Op0(..),Op1(..),Op2(..), RegPairSpec(..), RegSpec(..), Condition(..),
+  Prefix(..),Op(..),Op0(..),Op1(..),Op2(..), RegPairSpec(..), RegSpec(..), Condition(..),
   Instruction(..), justOp,
   cycles,
+  decodeAfterED,
   decode, encode,
   prettyInstructionBytes,
   theDecodeTable
@@ -15,6 +16,8 @@ import Data.Map (Map)
 import Data.Word8 (Word8)
 import Text.Printf (printf)
 import qualified Data.Map.Strict as Map
+
+data Prefix = PrefixED
 
 -- | Op-codes. Stratified by the number of following immediate bytes
 data Op = Op0 Op0 | Op1 Op1 | Op2 Op2
@@ -96,7 +99,7 @@ data Op2
 data Condition = NZ | NC | PO | P | Z | CY | PE | MI
   deriving (Eq,Ord,Show)
 
-data RegSpec = A | B | C | D | E | H | L | M
+data RegSpec = A | B | C | D | E | H | L | M | I
   deriving (Eq,Ord,Show)
 
 data RegPairSpec = BC | DE | HL | SP | PSW
@@ -121,7 +124,7 @@ allOps = map Op0 all0 ++ map Op1 all1 ++ map Op2 all2
       [SHLD,STA,LHLD,LDA,JMP,JMPx,CALL]
       ++ [ LXI r | r <- rps1]
       ++ [ op c | op <- [CCond,JCond], c <- conds]
---      ++ [ CALLx n | n <- [1..3] ] -- TODO: ED is new on z80
+--      ++ [ CALLx n | n <- [1..3] ] -- TODO: ED is prefix on z80
 
     regs = [A,B,C,D,E,H,L,M]
     rps1 = [BC,DE,HL,SP]
@@ -383,6 +386,7 @@ encodeRegSpec = \case
   L -> 5
   M -> 6
   A -> 7
+  I -> error "encodeRegSpec:I"
 
 encodeRegPairSpec :: RegPairSpec -> Word8
 encodeRegPairSpec = \case
@@ -393,13 +397,22 @@ encodeRegPairSpec = \case
   SP -> 3
   PSW -> 3 -- for PUSH/POP
 
+
+decodeAfterED :: Byte -> Op
+decodeAfterED = \case
+  0x47 -> Op0 (MOV {src=A,dest=I})
+  byte -> error (show ("decodeAfterED",byte))
+
+
 -- | define decode as the inverse of encoding
-decode :: Byte -> Op
-decode byte =
-  case Map.lookup byte map of
-    Nothing -> error $ "decode: " <> show byte
-    Just op -> op
-  where (DecodeTable map) = theDecodeTable
+decode :: Byte -> Either Prefix Op
+decode = \case
+  0xED -> Left PrefixED
+  byte ->
+    case Map.lookup byte map of
+      Nothing -> error $ "decode: " <> show byte
+      Just op -> Right op
+    where (DecodeTable map) = theDecodeTable
 
 newtype DecodeTable = DecodeTable (Map Byte Op)
 
