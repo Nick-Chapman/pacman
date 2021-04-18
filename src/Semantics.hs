@@ -82,8 +82,8 @@ execute0 :: Op0 -> Eff p (Flow p)
 execute0 = \case
   NOP -> do
     return Next
-  NOPx{} -> do
-    return Next
+  {-NOPx{} -> do
+    return Next-}
   STAX rp -> do
     a <- load16 rp
     b <- load A
@@ -289,11 +289,11 @@ execute0 = \case
     hi <- popStack
     dest <- MakeAddr $ HiLo{hi,lo}
     return (Jump dest)
-  RETx{} -> do
+  {-RETx{} -> do
     lo <- popStack
     hi <- popStack
     dest <- MakeAddr $ HiLo{hi,lo}
-    return (Jump dest)
+    return (Jump dest)-}
   PCHL -> do
     dest <- load16 HL
     return (Jump dest)
@@ -526,16 +526,16 @@ execute2 op2 a = case op2 of
       True -> return (Jump a)
   JMP -> do
     return (Jump a)
-  JMPx -> do
-    return (Jump a)
+  {-JMPx -> do
+    return (Jump a)-}
   CCond cond -> do
     executeCond cond >>= CaseBit >>= \case
       False -> return Next
       True -> call a
   CALL ->
     call a
-  CALLx{} ->
-    call a
+  {-CALLx{} ->
+    call a-}
 
 
 addToAccWithCarry :: Bit p -> Byte p -> Eff p (Flow p)
