@@ -78,6 +78,7 @@ data Op1
   | XRI
   | CPI
   | DJNZ
+  | JR Condition
   deriving (Eq,Ord,Show)
 
 -- | Ops which take two immediate bytes.
@@ -117,6 +118,7 @@ allOps = map Op0 all0 ++ map Op1 all1 ++ map Op2 all2
     all1 =
       [ADI,SUI,ANI,ORI,ACI,SBI,XRI,CPI,OUT,IN] ++ [ MVI r | r <- regs ]
       ++ [DJNZ]
+      ++ [JR NZ] -- [ JR c | c <- [Z,NZ,CY,NC] ] -- TODO: when encountered
     all2 =
       [SHLD,STA,LHLD,LDA,JMP,CALL]
       ++ [ LXI r | r <- rps1]
@@ -190,6 +192,7 @@ cycles jumpTaken = \case
   Op1 XRI -> 7
   Op1 CPI -> 7
   Op1 DJNZ -> if jumpTaken then 13 else 8
+  Op1 JR{} -> if jumpTaken then 12 else 7
 
 mcost :: RegSpec -> Int -> Int -> Int
 mcost x a b = case x of M -> b; _ -> a
@@ -269,6 +272,7 @@ encode = \case
   Op1 XRI -> 0xEE
   Op1 CPI -> 0xFE
   Op1 DJNZ -> 0x10
+  Op1 (JR cond) -> Byte (8 * encodeCondition cond + 0x20)
 
 encodeCondition :: Condition -> Word8
 encodeCondition = \case

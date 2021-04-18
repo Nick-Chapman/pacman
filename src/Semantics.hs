@@ -461,17 +461,22 @@ execute1 op1 b1 = case op1 of
     ff <- MakeByte 0xFF
     (b',_coutIgnored) <- AddWithCarry cin b ff
     save B b'
-    dontJump <- IsZero b'
-    CaseBit dontJump >>= \case
-      True ->
-        return Next
-      False -> do
-        pc <- getPC
-        zero <- MakeByte 0x0
-        displacement <- MakeAddr (HiLo{hi=zero,lo=b1})
-        (dest,_coutIgnored) <- Add16 pc displacement
-        dest' <- OffsetAddr (-256) dest -- TODO: dont do this for forward jumps
-        return (Jump dest')
+    IsZero b' >>= Flip >>= CaseBit >>= \case
+      False -> return Next
+      True -> jumpRelative b1
+  JR cond -> do
+    executeCond cond >>= CaseBit >>= \case
+      False -> return Next
+      True -> jumpRelative b1
+
+jumpRelative :: Byte p -> Eff p (Flow p)
+jumpRelative b1 = do
+  pc <- getPC
+  zero <- MakeByte 0x0
+  displacement <- MakeAddr (HiLo{hi=zero,lo=b1})
+  (dest,_coutIgnored) <- Add16 pc displacement
+  dest' <- OffsetAddr (-256) dest -- TODO: dont do this for forward jumps
+  return (Jump dest')
 
 binop
   :: (Byte p -> Byte p -> Eff p (Byte p))
