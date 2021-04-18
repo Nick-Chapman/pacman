@@ -19,7 +19,7 @@ data Reg = PCH | PCL | A | B | C | D | E | I
 data Reg16 = SP | HL
   deriving (Eq,Show)
 
-data Flag = FlagS | FlagZ | FlagA | FlagP | FlagCY
+data Flag = FlagS | FlagZ | FlagA | FlagP | FlagCY | YF | XF | NF
   deriving (Eq,Show)
 
 data Cpu p = Cpu
@@ -94,8 +94,11 @@ flagBitPos :: Flag -> Int
 flagBitPos = \case
   FlagS -> 7
   FlagZ -> 6
+  YF -> 5
   FlagA -> 4
+  XF -> 3
   FlagP -> 2
+  NF -> 1
   FlagCY -> 0
 
 get :: Cpu p -> Reg -> Byte p

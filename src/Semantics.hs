@@ -607,6 +607,11 @@ setFlagsFrom value = do
   SetFlag Cpu.FlagS s
   SetFlag Cpu.FlagZ z
   SetFlag Cpu.FlagP p
+  -- TODO: properly set the new flags (X,Y,N)
+  false <- MakeBit False
+  SetFlag Cpu.XF false
+  SetFlag Cpu.YF false
+  SetFlag Cpu.NF false
 
 
 pushStack :: Byte p -> Eff p ()
