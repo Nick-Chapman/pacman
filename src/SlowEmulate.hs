@@ -41,20 +41,22 @@ newtype Bit = Bit Bool
 instance Show Bit where show (Bit b) = if b then "1" else "0"
 
 data EmuState = EmuState
-  { ticks :: Ticks -- cycle count -- TODO: move inside cpu
+  { ticks :: Ticks -- cycle count -- TODO: move inside cpu?
   , icount :: Int -- instruction count -- KILL
   , cpu :: Cpu EmuTime
   , mem :: Mem
-  , interrupts_enabled :: Bool -- TODO: move inside cpu
+  , interrupts_enabled :: Bool -- TODO: move inside cpu?
+  , interrupt_mode :: Int  -- TODO: move inside cpu?
   }
 
 instance Show EmuState where
-  show s@EmuState{ticks,cpu} = do
+  show s@EmuState{icount,ticks,cpu} = do
+    let _ = dis1
     unwords
-      [ printf "cyc: %3s, " (show ticks)
+      [ printf "(%s) cyc: %s," (show icount) (show ticks)
       , show cpu
+--      , show (dis1 (pcBytes s))
       , "(" ++ unwords [ show b | b <- take 4 (pcBytes s) ] ++ ")"
-      , show (dis1 (pcBytes s))
       ]
 
 pcBytes :: EmuState -> [Byte]
@@ -75,6 +77,7 @@ initState = do
     , cpu = cpu0
     , mem
     , interrupts_enabled = False
+    , interrupt_mode = 0 -- TODO: ?
     }
 
 cpu0 :: Cpu EmuTime
@@ -113,6 +116,8 @@ emulate CB{trace} s0 = do
 
       EnableInterrupts -> k s { interrupts_enabled = True } ()
       DisableInterrupts -> k s { interrupts_enabled = False } ()
+      SetInterruptMode i -> k s { interrupt_mode = i } ()
+
       Decode byte -> k s (decode byte)
       DecodeAfterED byte -> k s (decodeAfterED byte)
       MarkReturnAddress {} -> k s ()

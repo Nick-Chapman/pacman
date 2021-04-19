@@ -16,9 +16,6 @@ data Reg = PCH | PCL | A | B | C | D | E | F | I
 data Reg16 = SP | HL
   deriving (Eq,Show)
 
-data Flag = SF | ZF | YF| HF | XF | PF | NF | CF
-  deriving (Eq,Show)
-
 data Cpu p = Cpu
   { pch :: Byte p
   , pcl :: Byte p
@@ -56,6 +53,9 @@ init addr0 aFF b bFF =
       , rB = b, rC = b, rD = b, rE = b
       , rI = b
       }
+
+data Flag = SF | ZF | YF| HF | XF | PF | NF | CF
+  deriving (Eq,Show)
 
 flagBitPos :: Flag -> Int
 flagBitPos = \case

@@ -26,6 +26,7 @@ data Eff p a where
 
   EnableInterrupts :: Eff p ()
   DisableInterrupts :: Eff p ()
+  SetInterruptMode :: Int -> Eff p ()
 
   Decode :: Byte p -> Eff p (Either Prefix Op)
   DecodeAfterED :: Byte p -> Eff p Op

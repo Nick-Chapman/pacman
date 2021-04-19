@@ -62,6 +62,7 @@ data Op0
   | SPHL
   | XCHG
   | EI
+  | IM2
   deriving (Eq,Ord,Show)
 
 -- | Ops which take one immediate byte.
@@ -193,6 +194,7 @@ cycles jumpTaken = \case
   Op1 CPI -> 7
   Op1 DJNZ -> if jumpTaken then 13 else 8
   Op1 JR{} -> if jumpTaken then 12 else 7
+  Op0 IM2 -> 8
 
 mcost :: RegSpec -> Int -> Int -> Int
 mcost x a b = case x of M -> b; _ -> a
@@ -273,6 +275,7 @@ encode = \case
   Op1 CPI -> 0xFE
   Op1 DJNZ -> 0x10
   Op1 (JR cond) -> Byte (8 * encodeCondition cond + 0x20)
+  Op0 IM2 -> 0x5E -- TODO: needs to be here?
 
 encodeCondition :: Condition -> Word8
 encodeCondition = \case
@@ -309,6 +312,7 @@ encodeRegPairSpec = \case
 decodeAfterED :: Byte -> Op
 decodeAfterED = \case
   0x47 -> Op0 (MOV {src=A,dest=I})
+  0x5E -> Op0 IM2
   byte -> error (show ("decodeAfterED",byte))
 
 -- | define decode as the inverse of encoding

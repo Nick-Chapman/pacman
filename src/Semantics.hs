@@ -314,6 +314,9 @@ execute0 = \case
   EI -> do
     EnableInterrupts
     return Next
+  IM2 -> do
+    SetInterruptMode 2
+    return Next
 
 
 decimalAdjust :: Bit p -> Bit p -> Byte p-> Eff p (Byte p, Bit p, Bit p)

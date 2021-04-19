@@ -1,10 +1,10 @@
 
 module Top (main) where
 
+import InstructionSet (theDecodeTable)
 import System.IO (stdout)
 import TraceEmu (traceEmulate,TraceConf(..))
 import qualified Graphics (main)
-import InstructionSet (theDecodeTable)
 
 main :: IO ()
 main = do
@@ -19,6 +19,6 @@ emu = do
 
 traceConf :: TraceConf
 traceConf = TraceConf
-  { stopAfter = Just 100
+  { stopAfter = Nothing --Just 1000
   , iPeriod = 1
   }
