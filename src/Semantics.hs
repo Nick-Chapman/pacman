@@ -425,10 +425,9 @@ execute1 op1 b1 = case op1 of
     save dest b1
     return Next
   OUT -> do
-    undefined
-    {-value <- load A
-    Ports.outputPort b1 value
-    return Next-}
+    value <- load A
+    PortOutput b1 value
+    return Next
   ADI -> do
     cin <- MakeBit False
     addToAccWithCarry cin b1

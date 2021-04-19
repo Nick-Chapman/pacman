@@ -24,6 +24,8 @@ data Eff p a where
   ReadMem :: Addr p -> Eff p (Byte p)
   WriteMem :: Addr p -> Byte p -> Eff p ()
 
+  PortOutput :: Byte p -> Byte p -> Eff p ()
+
   EnableInterrupts :: Eff p ()
   DisableInterrupts :: Eff p ()
   SetInterruptMode :: Int -> Eff p ()

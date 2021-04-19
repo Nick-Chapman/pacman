@@ -55,8 +55,8 @@ instance Show EmuState where
     unwords
       [ printf "(%s) cyc: %s," (show icount) (show ticks)
       , show cpu
---      , show (dis1 (pcBytes s))
       , "(" ++ unwords [ show b | b <- take 4 (pcBytes s) ] ++ ")"
+--      , show (dis1 (pcBytes s))
       ]
 
 pcBytes :: EmuState -> [Byte]
@@ -113,6 +113,10 @@ emulate CB{trace} s0 = do
 
       ReadMem a -> do b <- Mem.readIO mem a; k s b
       WriteMem a b -> do mem <- Mem.writeIO mem a b; k s { mem } ()
+
+      PortOutput a b -> do
+        let _ = print ("PortOutput",a,b)
+        k s ()
 
       EnableInterrupts -> k s { interrupts_enabled = True } ()
       DisableInterrupts -> k s { interrupts_enabled = False } ()

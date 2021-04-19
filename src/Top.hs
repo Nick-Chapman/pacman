@@ -19,6 +19,6 @@ emu = do
 
 traceConf :: TraceConf
 traceConf = TraceConf
-  { stopAfter = Nothing --Just 1000
+  { stopAfter = Just 6250
   , iPeriod = 1
   }
