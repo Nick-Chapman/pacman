@@ -29,14 +29,17 @@ fetchDecodeExec = do
 
 fetchOp :: Eff p Op
 fetchOp = do
-  byte <- fetch
-  Decode byte >>= \case
-    Left PrefixED -> do
-      Advance 4
-      byte2 <- fetch
-      DecodeAfterED byte2
-    Right op -> do
-      pure op
+  IsHalted >>= \case
+    True -> pure (Op0 NOP)
+    False -> do
+      byte <- fetch
+      Decode byte >>= \case
+        Left PrefixED -> do
+          Advance 4
+          byte2 <- fetch
+          DecodeAfterED byte2
+        Right op -> do
+          pure op
 
 fetchImmediates :: Op -> Eff p (Instruction (Byte p))
 fetchImmediates = \case
@@ -194,10 +197,8 @@ execute0 = \case
     save dest b
     return Next
   HLT -> do
-    --Unimplemented "HLT"
-    pc <- getPC -- already advanced
-    pcBack <- OffsetAddr (-1) pc
-    return $ Jump pcBack
+    SetHalted
+    return Next
   ADD reg -> do
     v1 <- load reg
     cin <- MakeBit False

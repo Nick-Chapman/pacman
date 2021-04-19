@@ -26,6 +26,9 @@ data Eff p a where
 
   PortOutput :: Byte p -> Byte p -> Eff p ()
 
+  IsHalted :: Eff p Bool
+  SetHalted :: Eff p ()
+
   EnableInterrupts :: Eff p ()
   DisableInterrupts :: Eff p ()
   SetInterruptMode :: Int -> Eff p ()

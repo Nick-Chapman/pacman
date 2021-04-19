@@ -42,11 +42,13 @@ instance Show Bit where show (Bit b) = if b then "1" else "0"
 
 data EmuState = EmuState
   { ticks :: Ticks -- cycle count -- TODO: move inside cpu?
-  , icount :: Int -- instruction count -- KILL
+  , icount :: Int -- instruction count -- KILL?
   , cpu :: Cpu EmuTime
   , mem :: Mem
+  , halted :: Bool
   , interrupts_enabled :: Bool -- TODO: move inside cpu?
   , interrupt_mode :: Int  -- TODO: move inside cpu?
+  -- TODO: interrupt_pending etc
   }
 
 instance Show EmuState where
@@ -76,6 +78,7 @@ initState = do
     , icount = 0
     , cpu = cpu0
     , mem
+    , halted = False
     , interrupts_enabled = False
     , interrupt_mode = 0 -- TODO: ?
     }
@@ -117,6 +120,9 @@ emulate CB{trace} s0 = do
       PortOutput a b -> do
         let _ = print ("PortOutput",a,b)
         k s ()
+
+      IsHalted -> k s (halted s)
+      SetHalted -> k s { halted = True } ()
 
       EnableInterrupts -> k s { interrupts_enabled = True } ()
       DisableInterrupts -> k s { interrupts_enabled = False } ()
