@@ -3,22 +3,20 @@ module Top (main) where
 
 import InstructionSet (theDecodeTable)
 import System.IO (stdout)
-import TraceEmu (traceEmulate,TraceConf(..))
 import qualified Graphics (main)
+import qualified PacEmu as Pac (emulate,Conf(..))
+import PacEmu (DisControl(..))
 
 main :: IO ()
 main = do
+  let _ = stdout
   let _ = Graphics.main
   let _ = print theDecodeTable
-  emu
+  Pac.emulate conf
   pure ()
 
-emu :: IO ()
-emu = do
-  traceEmulate stdout traceConf
-
-traceConf :: TraceConf
-traceConf = TraceConf
-  { stopAfter = Just 7100
-  , iPeriod = 1
+conf :: Pac.Conf
+conf = Pac.Conf
+  { stop = Just 7100
+  , trace = Just (stdout,DisOff)
   }
