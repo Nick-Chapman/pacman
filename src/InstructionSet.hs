@@ -158,7 +158,7 @@ cycles jumpTaken = \case
   Op0 MOV {dest=M,src=M} -> error "illegal instruction: MOV M,M"
   Op0 MOV {src=M} -> 7
   Op0 MOV {dest=M} -> 7
-  Op0 MOV{} -> 5
+  Op0 MOV{} -> 4 --8080: was 5
   Op0 (ADD r) -> mcost r 4 7
   Op0 (ADC r) -> mcost r 4 7
   Op0 (SUB r) -> mcost r 4 7
@@ -171,7 +171,7 @@ cycles jumpTaken = \case
   Op0 POP{} -> 10
   Op2 JCond{} -> 10
   Op2 JMP -> 10
-  Op1 OUT -> 11 -- 8080: was 10
+  Op1 OUT -> 11 --8080: was 10
   Op0 XTHL -> 18
   Op0 DI -> 4
   Op2 CCond{} -> if jumpTaken then 17 else 11
@@ -194,7 +194,7 @@ cycles jumpTaken = \case
   Op1 CPI -> 7
   Op1 DJNZ -> if jumpTaken then 13 else 8
   Op1 JR{} -> if jumpTaken then 12 else 7
-  Op0 IM2 -> 4 -- not including +4 for ED prefix
+  Op0 IM2 -> 3 -- not including +5 for ED prefix
 
 mcost :: RegSpec -> Int -> Int -> Int
 mcost x a b = case x of M -> b; _ -> a

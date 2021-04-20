@@ -41,7 +41,7 @@ fetchOp = do
       byte <- fetch
       Decode byte >>= \case
         Left PrefixED -> do
-          Advance 4
+          Advance 5 -- TODO:??
           byte2 <- fetch
           DecodeAfterED byte2
         Right op -> do
