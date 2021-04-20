@@ -22,39 +22,46 @@ emulate Conf{stop,trace} = do
   loop state0 Z.interaction
   where
     loop :: State -> Z.Interaction -> IO ()
-    loop s@State{steps,cycles} = \case
+    loop s@State{steps,cycles,iData} = \case
 
       Z.Trace z i -> do
-        case trace of
-          Nothing -> pure ()
-          Just (handle,disControl) -> do
-            hPutStrLn handle (traceLine disControl s z)
-        loop s { steps = steps + 1 } i
+        let doStop = case stop of Just i -> (steps > i); Nothing -> False
+        if doStop then print ("STOP",steps,cycles) else do
+          case trace of
+            Nothing -> pure ()
+            Just (handle,disControl) -> do
+              hPutStrLn handle (traceLine disControl s z)
+          loop s { steps = steps + 1 } i
 
       Z.ReadMem a f -> do b <- Mem.readIO (mem s) a; loop s (f b)
       Z.WriteMem a b i -> do mem <- Mem.writeIO (mem s) a b; loop s { mem } i
 
-      Z.OutputPort _port _val i -> do
-        print ("OutputPort",steps,cycles,_port,_val) -- TODO
-        loop s i
+      Z.OutputPort port val i -> do
+        print ("OutputPort",steps,cycles,port,val)
+        if port /= 0 then error "OutputPort, port!=0" else
+          loop s { iData = val } i
 
       Z.Advance n f -> do
-        let
-          cycles' = cycles + n
-          doStop = case stop of Just i -> (steps > i); Nothing -> False
-        if doStop then print ("STOP",steps,cycles) else
-          loop s { cycles = cycles' } (f Nothing)
+        let cycles' = cycles + n
+        if cycles' >= cyclesPerFrame
+          then do
+          print ("Advance/Interrupt",steps,cycles,iData)
+          loop s { cycles = cycles' - cyclesPerFrame } (f (Just iData))
+          else loop s { cycles = cycles' } (f Nothing)
+          where
+            cyclesPerFrame = 3072000 `div` 60
 
 data State = State
   { steps :: Int
   , cycles :: Int
   , mem :: Mem
+  , iData :: Byte
   }
 
 initState :: IO State
 initState = do
   mem <- Mem.init
-  pure $ State { steps = 0, cycles = 0, mem}
+  pure $ State { steps = 0, cycles = 0, mem, iData = 0}
 
 traceLine :: DisControl -> State -> Z.State -> String
 traceLine disControl s@State{steps,cycles} z = do

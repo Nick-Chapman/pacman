@@ -43,7 +43,7 @@ data State = State
   , halted :: Bool
   , interrupts_enabled :: Bool -- TODO: move inside cpu?
   , interrupt_mode :: Int  -- TODO: move inside cpu?
-  -- TODO: interrupt_pending etc
+  , interrupt_data :: Maybe Byte
   }
 
 instance Show State where
@@ -62,6 +62,7 @@ initState = do
     , halted = False
     , interrupts_enabled = False
     , interrupt_mode = 0 -- TODO: ?
+    , interrupt_data = Nothing
     }
 
 cpu0 :: Cpu EmuTime
@@ -102,8 +103,11 @@ interaction = emulate initState
       E.PortOutput p v -> do
         OutputPort p v (k s ())
 
+      E.IsInterrupt -> k s { interrupt_data = Nothing } (interrupt_data s)
+
       E.IsHalted -> k s (halted s)
       E.SetHalted -> k s { halted = True } ()
+      E.SetUnHalted -> k s { halted = False } ()
 
       E.EnableInterrupts -> k s { interrupts_enabled = True } ()
       E.DisableInterrupts -> k s { interrupts_enabled = False } ()
@@ -116,9 +120,8 @@ interaction = emulate initState
       E.Trace -> Trace s (k s ())
 
       E.Advance n -> do
-        Advance n $ \case
-          Just{} -> undefined -- TODO: process pending interrupt
-          Nothing -> k s ()
+        Advance n $ \interrupt_data ->
+          k s { interrupt_data } ()
 
       E.MakeBit (bool) -> k s (Bit bool)
       E.Flip (Bit bool) -> k s (Bit (not bool))

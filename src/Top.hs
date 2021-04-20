@@ -9,7 +9,7 @@ import PacEmu (DisControl(..))
 
 main :: IO ()
 main = do
-  let _ = stdout
+  let _ = (stdout,DisOff)
   let _ = Graphics.main
   let _ = print theDecodeTable
   Pac.emulate conf

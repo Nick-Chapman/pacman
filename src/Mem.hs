@@ -13,7 +13,7 @@ data Mem = Mem  -- TODO: mem mapped IO
   { rom6e :: Rom
   , rom6f :: Rom
   , rom6h :: Rom
---  , rom6j :: Rom
+  , rom6j :: Rom
   , ram :: Ram
   }
 
@@ -22,15 +22,16 @@ init = do
   rom6e <- Rom.load 4096 "roms/pacman.6e"
   rom6f <- Rom.load 4096 "roms/pacman.6f"
   rom6h <- Rom.load 4096 "roms/pacman.6h"
-  -- TODO: rom6j
+  rom6j <- Rom.load 4096 "roms/pacman.6j"
   let ram = Ram.init (4 * 1024 + 256)
-  pure $ Mem { rom6e, rom6f, rom6h, ram }
+  pure $ Mem { rom6e, rom6f, rom6h, rom6j, ram }
 
 read :: Mem -> Addr -> Byte
-read Mem{rom6e,rom6f,rom6h,ram} a = if
+read Mem{rom6e,rom6f,rom6h,rom6j,ram} a = if
   | (a < 0x1000) -> Rom.lookup rom6e (fromIntegral a)
   | (a < 0x2000) -> Rom.lookup rom6f (fromIntegral a - 0x1000)
   | (a < 0x3000) -> Rom.lookup rom6h (fromIntegral a - 0x2000)
+  | (a < 0x4000) -> Rom.lookup rom6j (fromIntegral a - 0x3000)
   | (a >= startRam && a < endRam) -> do
       undefined ram Ram.read
   | otherwise ->

@@ -1,31 +1,37 @@
 
--- | This defines the execution semantics (Effects) of the 8080 instructions
+-- | Execution semantics of Z80 instructions
 
-module Semantics
-  ( fetchDecodeExec
-  -- , decodeExec
-  --, execInstruction
-  ) where
-
-import Prelude hiding (subtract)
+module Semantics (fetchDecodeExec) where
 
 import Cpu (Reg16,Reg)
 import Effect (Eff(..))
 import HiLo (HiLo(..))
 import InstructionSet (Prefix(..),Op(..),Instruction(..),Op0(..),Op1(..),Op2(..),RegPairSpec(..),Condition(..),cycles,justOp)
-import Phase (Addr,Byte,Bit)
-import qualified Cpu
---import qualified Ports (inputPort,outputPort)
 import InstructionSet (RegSpec(..))
-
--- | Semantics are defined to be Phase generic
+import Phase (Addr,Byte,Bit)
+import Prelude hiding (subtract)
+import qualified Cpu
 
 fetchDecodeExec :: Eff p ()
 fetchDecodeExec = do
   Trace
-  op <- fetchOp
-  i <- fetchImmediates op
-  execInstruction i
+  IsInterrupt >>= \case
+    Nothing -> do
+      op <- fetchOp
+      i <- fetchImmediates op
+      execInstruction i
+    Just byte -> do
+      -- TODO: check interrupt mode
+      SetUnHalted
+      Advance 23 -- TODO: ?
+      hi <- GetReg Cpu.I
+      vec0 <- MakeAddr $ HiLo{hi,lo = byte}
+      vec1 <- OffsetAddr 1 vec0
+      lo <- ReadMem vec0
+      hi <- ReadMem vec1
+      -- TODO: need to call not jump (i.e. push return addr to stack)
+      dest <- MakeAddr $ HiLo{hi,lo}
+      setPC dest
 
 fetchOp :: Eff p Op
 fetchOp = do
@@ -54,7 +60,6 @@ fetchImmediates = \case
 
 execInstruction :: Instruction (Byte p) -> Eff p ()
 execInstruction instruction = do
-  --TraceInstruction instruction
   n <- execute instruction >>= \case
     Next -> do
       return $ cycles False (justOp instruction)
