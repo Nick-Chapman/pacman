@@ -106,17 +106,19 @@ execute0 = \case
     v0 <- load reg
     cin <- MakeBit True
     zero <- MakeByte 0
-    (v,cout) <- AddWithCarry cin v0 zero
-    aux <- addForAuxCarry cin v0 zero
+    (v,_coutIgnored) <- AddWithCarry cin v0 zero
+    aux <- carryBit 4 cin v0 zero
     SetFlag Cpu.HF aux
-    saveAndSetFlagsFrom reg cout v
+    o <- overflows cin v0 zero
+    SetFlag Cpu.PF o
+    saveAndSetFlagsFrom reg v
     return Next
   DCR reg -> do
     v0 <- load reg
     cin <- MakeBit True
     zero <- MakeByte 0
-    (v,borrow) <- subWithCarry cin v0 zero
-    saveAndSetFlagsFrom reg borrow v
+    (v,_borrowIgnored) <- subWithCarry cin v0 zero
+    saveAndSetFlagsFrom reg v
     return Next
   RLC -> do
     byte <- load A
@@ -145,7 +147,9 @@ execute0 = \case
     SetFlag Cpu.HF auxOut
     SetFlag Cpu.CF cout
     save A byteOut
-    setFlagsFrom cout byteOut -- TODO: cout used for CF and PF ?
+    o <- MakeBit False -- TODO: ???
+    SetFlag Cpu.PF o
+    setFlagsFrom byteOut
     return Next
   STC -> do
     bit <- MakeBit True
@@ -233,7 +237,7 @@ execute0 = \case
     v1 <- load A
     v2 <- load reg
     (v,borrow) <- subtract v1 v2
-    setFlagsFrom borrow v
+    setFlagsFrom v
     SetFlag Cpu.CF borrow
     return Next
   RCond cond -> do
@@ -460,7 +464,7 @@ execute1 op1 b1 = case op1 of
   CPI -> do
     b <- load A
     (v,borrow) <- subtract b b1
-    setFlagsFrom borrow v
+    setFlagsFrom v
     SetFlag Cpu.CF borrow
     return Next
   DJNZ -> do
@@ -494,7 +498,8 @@ binop f b1 = do
   v0 <- load A
   v <- f b1 v0
   p <- IsParity v
-  saveAndSetFlagsFrom A p v
+  SetFlag Cpu.PF p
+  saveAndSetFlagsFrom A v
   resetCarry
   resetAux
   return Next
@@ -506,7 +511,8 @@ andA b1 = do
   v0 <- load A
   v <- AndB b1 v0
   p <- IsParity v
-  saveAndSetFlagsFrom A p v
+  SetFlag Cpu.PF p
+  saveAndSetFlagsFrom A v
   resetCarry
   w <- OrB b1 v0
   aux <- TestBit w 3
@@ -573,10 +579,12 @@ addToAccWithCarry :: Bit p -> Byte p -> Eff p (Flow p)
 addToAccWithCarry cin v1 = do
   v2 <- load A
   (v,cout) <- AddWithCarry cin v1 v2
-  aux <- addForAuxCarry cin v1 v2
+  aux <- carryBit 4 cin v1 v2
   SetFlag Cpu.HF aux
   SetFlag Cpu.CF cout
-  saveAndSetFlagsFrom A cout v
+  o <- overflows cin v1 v2
+  SetFlag Cpu.PF o
+  saveAndSetFlagsFrom A v
   return Next
 
 
@@ -585,7 +593,9 @@ subToAccWithCarry cin v2 = do
   v1 <- load A
   (v,cout) <- subWithCarry cin v1 v2
   SetFlag Cpu.CF cout
-  saveAndSetFlagsFrom A cout v
+  o <- overflows cin v1 v2
+  SetFlag Cpu.PF o
+  saveAndSetFlagsFrom A v
   return Next
 
 
@@ -598,21 +608,35 @@ subWithCarry :: Bit p -> Byte p -> Byte p -> Eff p (Byte p, Bit p)
 subWithCarry cin v1 v2 = do
   cin' <- Flip cin
   v2comp <- Complement v2
-  (v,cout) <- AddWithCarry cin' v1 v2comp
-  aux <- addForAuxCarry cin' v1 v2comp
+  (v,cout) <- AddWithCarry cin' v1 v2comp -- TODO: abstract/share add(with flags)
+  aux <- carryBit 4 cin' v1 v2comp
   SetFlag Cpu.HF aux
+  o <- overflows cin' v1 v2comp
+  SetFlag Cpu.PF o
   borrow <- Flip cout
   return (v, borrow)
 
+overflows :: Bit p -> Byte p -> Byte p -> Eff p (Bit p)
+overflows cin v1 v2 = do
+  c7 <- carryBit 7 cin v1 v2
+  c8 <- carryBit 8 cin v1 v2
+  xOrBit c7 c8
 
-addForAuxCarry :: Bit p -> Byte p -> Byte p -> Eff p (Bit p)
-addForAuxCarry cin v1 v2 = do
-  mask <- MakeByte 0xF
-  v1masked <- AndB v1 mask
-  v2masked <- AndB v2 mask
-  (nibbleSum,_coutIgnored) <- AddWithCarry cin v1masked v2masked
-  TestBit nibbleSum 4
+xOrBit :: Bit p -> Bit p -> Eff p (Bit p)
+xOrBit x y = do
+  o <- OrBit x y
+  a <- AndBit x y
+  n <- Flip a
+  AndBit o n
 
+carryBit :: Int -> Bit p -> Byte p -> Byte p -> Eff p (Bit p)
+carryBit n cin v1 v2 = do
+  (result,_coutIgnored) <- AddWithCarry cin v1 v2
+  diffs <- XorB v1 v2
+  carry <- XorB result diffs
+  if n>8 then error "carryBit" else
+    if n==8 then pure _coutIgnored else
+      carry `TestBit` n
 
 call :: Addr p -> Eff p (Flow p)
 call a = do
@@ -625,20 +649,19 @@ call a = do
   return (Jump a)
 
 
-saveAndSetFlagsFrom :: RegSpec -> Bit p -> Byte p -> Eff p ()
-saveAndSetFlagsFrom reg p v = do
+saveAndSetFlagsFrom :: RegSpec -> Byte p -> Eff p ()
+saveAndSetFlagsFrom reg v = do
   save reg v
-  setFlagsFrom p v
+  setFlagsFrom v
 
-setFlagsFrom :: Bit p -> Byte p -> Eff p ()
-setFlagsFrom p value = do
+setFlagsFrom :: Byte p -> Eff p ()
+setFlagsFrom value = do
   s <- IsSigned value
   z <- IsZero value
   x <- TestBit value 3
   y <- TestBit value 5
   SetFlag Cpu.SF s
   SetFlag Cpu.ZF z
-  SetFlag Cpu.PF p
   SetFlag Cpu.XF x
   SetFlag Cpu.YF y
   false <- MakeBit False -- TODO: set NF correctly
