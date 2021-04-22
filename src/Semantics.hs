@@ -507,7 +507,8 @@ binop f b1 = do
   SetFlag Cpu.PF p
   saveAndSetFlagsFrom False A v
   resetCarry
-  resetAux
+  h <- MakeBit False
+  SetFlag Cpu.HF h
   return Next
 
 andA
@@ -520,20 +521,16 @@ andA b1 = do
   SetFlag Cpu.PF p
   saveAndSetFlagsFrom False A v
   resetCarry
-  w <- OrB b1 v0
-  aux <- TestBit w 3
-  SetFlag Cpu.HF aux
+  --w <- OrB b1 v0
+  --h <- TestBit w 3 -- 8080 behav
+  h <- MakeBit True
+  SetFlag Cpu.HF h
   return Next
 
 resetCarry :: Eff p ()
 resetCarry = do
   c <- MakeBit False
   SetFlag Cpu.CF c
-
-resetAux :: Eff p ()
-resetAux = do
-  a <- MakeBit False
-  SetFlag Cpu.HF a
 
 
 execute2 :: Op2 -> Addr p -> Eff p (Flow p)
