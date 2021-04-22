@@ -138,7 +138,7 @@ cycles jumpTaken = \case
   Op0 STAX{} -> 7
   Op2 SHLD -> 16
   Op2 STA -> 13
-  Op0 INX{} -> 5
+  Op0 INX{} -> 6 -- 8080: was 5
   Op0 (INR r) -> mcost r 4 10 --8080: was 5
   Op0 (DCR r) -> mcost r 4 10 --8080: was 5
   Op1 (MVI r) -> mcost r 7 10
