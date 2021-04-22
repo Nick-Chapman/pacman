@@ -332,6 +332,28 @@ execute0 = \case
   IM2 -> do
     SetInterruptMode 2
     return Next
+  EXX -> do
+    b <- GetReg Cpu.B
+    c <- GetReg Cpu.C
+    d <- GetReg Cpu.D
+    e <- GetReg Cpu.E
+    b' <- GetReg Cpu.B'
+    c' <- GetReg Cpu.C'
+    d' <- GetReg Cpu.D'
+    e' <- GetReg Cpu.E'
+    hl <- GetReg16 Cpu.HL
+    hl' <- GetReg16 Cpu.HL'
+    SetReg Cpu.B b'
+    SetReg Cpu.C c'
+    SetReg Cpu.D d'
+    SetReg Cpu.E e'
+    SetReg Cpu.B' b
+    SetReg Cpu.C' c
+    SetReg Cpu.D' d
+    SetReg Cpu.E' e
+    SetReg16 Cpu.HL hl'
+    SetReg16 Cpu.HL' hl
+    return Next
 
 
 decimalAdjust :: Bit p -> Bit p -> Byte p-> Eff p (Byte p, Bit p, Bit p)

@@ -11,9 +11,11 @@ import Prelude hiding (init)
 import Phase (Addr,Byte,Bit)
 
 data Reg = PCH | PCL | A | B | C | D | E | F | I
+--  | A' | F'
+  | B' | C' | D' | E'
   deriving (Eq,Ord,Show)
 
-data Reg16 = SP | HL
+data Reg16 = SP | HL | HL'
   deriving (Eq,Show)
 
 data Cpu p = Cpu
@@ -21,6 +23,7 @@ data Cpu p = Cpu
   , pcl :: Byte p
   , sp :: Addr p
   , hl :: Addr p
+  , hl' :: Addr p
   , rA :: Byte p
   , rB :: Byte p
   , rC :: Byte p
@@ -28,6 +31,10 @@ data Cpu p = Cpu
   , rE :: Byte p
   , rF :: Byte p
   , rI :: Byte p
+  , rB':: Byte p
+  , rC':: Byte p
+  , rD':: Byte p
+  , rE':: Byte p
   }
 
 instance (Show (Addr p), Show (Bit p), Show (Byte p)) => Show (Cpu p) where
@@ -49,8 +56,10 @@ init addr0 aFF b bFF =
   Cpu { pch = b, pcl = b
       , sp = aFF
       , hl = addr0
+      , hl'= addr0
       , rA = bFF, rF = bFF
       , rB = b, rC = b, rD = b, rE = b
+      , rB'= b, rC'= b, rD'= b, rE'= b
       , rI = b
       }
 
@@ -69,7 +78,10 @@ flagBitPos = \case
   CF -> 0
 
 get :: Cpu p -> Reg -> Byte p
-get Cpu{pch,pcl,rA,rB,rC,rD,rE,rI,rF} = \case
+get Cpu{pch,pcl,rA
+       ,rB,rC,rD,rE
+       ,rB',rC',rD',rE'
+       ,rI,rF} = \case
   PCH -> pch
   PCL -> pcl
   A -> rA
@@ -77,6 +89,10 @@ get Cpu{pch,pcl,rA,rB,rC,rD,rE,rI,rF} = \case
   C -> rC
   D -> rD
   E -> rE
+  B'-> rB'
+  C'-> rC'
+  D'-> rD'
+  E'-> rE'
   F -> rF
   I -> rI
 
@@ -89,15 +105,21 @@ set cpu r x = case r of
   C -> cpu { rC = x }
   D -> cpu { rD = x }
   E -> cpu { rE = x }
+  B'-> cpu { rB'= x }
+  C'-> cpu { rC'= x }
+  D'-> cpu { rD'= x }
+  E'-> cpu { rE'= x }
   F -> cpu { rF = x }
   I -> cpu { rI = x }
 
 get16 :: Cpu p -> Reg16 -> Addr p
-get16 Cpu{sp,hl} = \case
+get16 Cpu{sp,hl,hl'} = \case
   SP -> sp
   HL -> hl
+  HL' -> hl'
 
 set16 :: Cpu p -> Reg16 -> Addr p -> Cpu p
 set16 cpu rr a = case rr of
   SP -> cpu { sp = a }
   HL -> cpu { hl = a }
+  HL' -> cpu { hl' = a }

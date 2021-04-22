@@ -63,6 +63,7 @@ data Op0
   | XCHG
   | EI
   | IM2
+  | EXX
   deriving (Eq,Ord,Show)
 
 -- | Ops which take one immediate byte.
@@ -108,7 +109,7 @@ allOps :: [Op]
 allOps = map Op0 all0 ++ map Op1 all1 ++ map Op2 all2
   where
     all0 =
-      [NOP,RLC,RAL,DAA,STC,RRC,RAR,CMA,CMC,HLT,XTHL,DI,RET,PCHL,SPHL,XCHG,EI]
+      [NOP,RLC,RAL,DAA,STC,RRC,RAR,CMA,CMC,HLT,XTHL,DI,RET,PCHL,SPHL,XCHG,EI,EXX]
       ++ [ op p | op <- [STAX,LDAX], p <- [BC,DE] ]
       ++ [ op r | op <- [INR,DCR,ADD,ADC,SUB,SBB,ANA,XRA,ORA,CMP], r <- regs ]
       ++ [ op p | op <- [INX,DAD,DCX], p <- rps1 ]
@@ -195,6 +196,7 @@ cycles jumpTaken = \case
   Op1 DJNZ -> if jumpTaken then 13 else 8
   Op1 JR{} -> if jumpTaken then 12 else 7
   Op0 IM2 -> 3 -- not including +5 for ED prefix
+  Op0 EXX -> 4
 
 mcost :: RegSpec -> Int -> Int -> Int
 mcost x a b = case x of M -> b; _ -> a
@@ -276,6 +278,7 @@ encode = \case
   Op1 DJNZ -> 0x10
   Op1 (JR cond) -> Byte (8 * encodeCondition cond + 0x20)
   Op0 IM2 -> 0x5E -- TODO: needs to be here?
+  Op0 EXX -> 0xD9
 
 encodeCondition :: Condition -> Word8
 encodeCondition = \case

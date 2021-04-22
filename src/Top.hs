@@ -18,6 +18,6 @@ main = do
 conf :: Pac.Conf
 conf = Pac.Conf
   { stop = 250
-  , trace = Just (stdout, 246)
+  , trace = Just (stdout, 247)
   , disControl = DisOff
   }
