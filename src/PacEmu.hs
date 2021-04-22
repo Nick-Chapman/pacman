@@ -22,7 +22,7 @@ emulate Conf{stop,trace} = do
   loop state0 Z.interaction
   where
     loop :: State -> Z.Interaction -> IO ()
-    loop s@State{steps,cycles,iData} = \case
+    loop s@State{frames,steps,cycles,iData} = \case
 
       Z.Trace z i -> do
         let doStop = case stop of Just i -> (steps > i); Nothing -> False
@@ -47,14 +47,16 @@ emulate Conf{stop,trace} = do
         let cycles' = cycles + n
         if cycles' >= cyclesPerFrame
           then do
-          --print ("Advance/Interrupt",steps,cycles,iData)
-          loop s { cycles = cycles' - cyclesPerFrame } (f (Just iData))
+          --print ("Advance/Interrupt",frames,steps,cycles,iData)
+          putStrLn $ "frame: " ++ show frames
+          loop s { frames = frames + 1, cycles = cycles' - cyclesPerFrame } (f (Just iData))
           else loop s { cycles = cycles' } (f Nothing)
           where
             cyclesPerFrame = 3072000 `div` 60
 
 data State = State
-  { steps :: Int
+  { frames :: Int
+  , steps :: Int
   , cycles :: Int
   , mem :: Mem
   , iData :: Byte
@@ -63,7 +65,7 @@ data State = State
 initState :: IO State
 initState = do
   mem <- Mem.init
-  pure $ State { steps = 0, cycles = 0, mem, iData = 0}
+  pure $ State { frames = 0, steps = 0, cycles = 0, mem, iData = 0}
 
 traceLine :: DisControl -> State -> Z.State -> String
 traceLine disControl s@State{steps,cycles} z = do
