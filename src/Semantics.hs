@@ -602,8 +602,6 @@ subToAccWithCarry cin v2 = do
   v1 <- load A
   (v,cout) <- subWithCarry cin v1 v2
   SetFlag Cpu.CF cout
-  o <- overflows cin v1 v2
-  SetFlag Cpu.PF o
   saveAndSetFlagsFrom True A v
   return Next
 
