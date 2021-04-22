@@ -33,7 +33,7 @@ read Mem{rom6e,rom6f,rom6h,rom6j,ram} a = if
   | (a < 0x3000) -> Rom.lookup rom6h (fromIntegral a - 0x2000)
   | (a < 0x4000) -> Rom.lookup rom6j (fromIntegral a - 0x3000)
   | (a >= startRam && a < endRam) -> do
-      undefined ram Ram.read
+      Ram.read ram (fromIntegral (a - startRam))
   | otherwise ->
     error (show ("Mem.read",a))
 

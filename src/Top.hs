@@ -17,6 +17,6 @@ main = do
 
 conf :: Pac.Conf
 conf = Pac.Conf
-  { stop = Nothing -- Just 16000
+  { stop = Just 200000
   , trace = Just (stdout, Nothing)
   }
