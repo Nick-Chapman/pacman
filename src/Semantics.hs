@@ -27,10 +27,10 @@ fetchDecodeExec = do
       hi <- GetReg Cpu.I
       vec0 <- MakeAddr $ HiLo{hi,lo = byte}
       vec1 <- OffsetAddr 1 vec0
-      lo <- ReadMem vec0
       hi <- ReadMem vec1
-      -- TODO: need to call not jump (i.e. push return addr to stack)
+      lo <- ReadMem vec0
       dest <- MakeAddr $ HiLo{hi,lo}
+      pushReturn
       setPC dest
 
 fetchOp :: Eff p Op
@@ -568,9 +568,12 @@ execute2 op2 a = case op2 of
   CCond cond -> do
     executeCond cond >>= CaseBit >>= \case
       False -> return Next
-      True -> call a
-  CALL ->
-    call a
+      True -> do
+        pushReturn
+        return (Jump a)
+  CALL -> do
+    pushReturn
+    return (Jump a)
   {-CALLx{} ->
     call a-}
 
@@ -638,15 +641,15 @@ carryBit n cin v1 v2 = do
     if n==8 then pure _coutIgnored else
       carry `TestBit` n
 
-call :: Addr p -> Eff p (Flow p)
-call a = do
+pushReturn :: Eff p ()
+pushReturn = do
   hi <- GetReg Cpu.PCH
   lo <- GetReg Cpu.PCL
   pushStack hi
   pushStack lo
   returnAddr <- MakeAddr $ HiLo{hi,lo}
   MarkReturnAddress returnAddr -- for reachabiity
-  return (Jump a)
+
 
 
 saveAndSetFlagsFrom :: RegSpec -> Byte p -> Eff p ()

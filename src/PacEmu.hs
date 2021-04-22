@@ -10,8 +10,8 @@ import qualified Mem (init,readIO,writeIO,read)
 import qualified ZEmu as Z (State,Interaction(..),interaction,programCounter)
 
 data Conf = Conf
-  { stop :: Maybe Int
-  , trace :: Maybe (Handle,DisControl)
+  { stop :: Maybe Int --steps
+  , trace :: Maybe (Handle, Maybe Int) --steps
   }
 
 data DisControl = DisOn | DisOff
@@ -29,7 +29,9 @@ emulate Conf{stop,trace} = do
         if doStop then print ("STOP",steps,cycles) else do
           case trace of
             Nothing -> pure ()
-            Just (handle,disControl) -> do
+            Just (handle,disFrom) -> do
+              let doDis = case disFrom of Just i -> (steps > i); Nothing -> False
+              let disControl = if doDis then DisOn else DisOff
               hPutStrLn handle (traceLine disControl s z)
           loop s { steps = steps + 1 } i
 

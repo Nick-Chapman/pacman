@@ -50,10 +50,17 @@ startRam = 0x4000
 endRam = 0x5100
 
 writeIO :: Mem -> Addr -> Byte -> IO Mem
-writeIO m a b = do
-  --print ("Mem.write",a,b)
-  let! mem' = write m a b
-  pure mem'
+writeIO m a b = if
+  | a == 0xFFFE -> do
+      print ("expected bad Mem.write",a,b)
+      pure m
+  | a == 0xFFFD -> do
+      print ("expected bad Mem.write",a,b)
+      pure m
+  | otherwise -> do
+      --print ("Mem.write",a,b)
+      let! m' = write m a b
+      pure m'
 
 readIO :: Mem -> Addr -> IO Byte
 readIO m a = do
