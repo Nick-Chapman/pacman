@@ -111,14 +111,14 @@ execute0 = \case
     SetFlag Cpu.HF aux
     o <- overflows cin v0 zero
     SetFlag Cpu.PF o
-    saveAndSetFlagsFrom reg v
+    saveAndSetFlagsFrom False reg v
     return Next
   DCR reg -> do
     v0 <- load reg
     cin <- MakeBit True
     zero <- MakeByte 0
     (v,_borrowIgnored) <- subWithCarry cin v0 zero
-    saveAndSetFlagsFrom reg v
+    saveAndSetFlagsFrom True reg v
     return Next
   RLC -> do
     byte <- load A
@@ -149,7 +149,7 @@ execute0 = \case
     save A byteOut
     o <- MakeBit False -- TODO: ???
     SetFlag Cpu.PF o
-    setFlagsFrom byteOut
+    setFlagsFrom False byteOut
     return Next
   STC -> do
     bit <- MakeBit True
@@ -237,7 +237,7 @@ execute0 = \case
     v1 <- load A
     v2 <- load reg
     (v,borrow) <- subtract v1 v2
-    setFlagsFrom v
+    setFlagsFrom True v
     SetFlag Cpu.CF borrow
     return Next
   RCond cond -> do
@@ -463,9 +463,14 @@ execute1 op1 b1 = case op1 of
     binop XorB b1
   CPI -> do
     b <- load A
-    (v,borrow) <- subtract b b1
-    setFlagsFrom v
+    (v,borrow) <- subtract b b1 -- set hf here..
+    setFlagsFrom True v
     SetFlag Cpu.CF borrow
+    GetFlag Cpu.HF >>= Flip >>= SetFlag Cpu.HF -- and then flip hf here
+    x <- TestBit b1 3
+    SetFlag Cpu.XF x
+    y <- TestBit b1 5
+    SetFlag Cpu.YF y
     return Next
   DJNZ -> do
     b <- load B
@@ -499,7 +504,7 @@ binop f b1 = do
   v <- f b1 v0
   p <- IsParity v
   SetFlag Cpu.PF p
-  saveAndSetFlagsFrom A v
+  saveAndSetFlagsFrom False A v
   resetCarry
   resetAux
   return Next
@@ -512,7 +517,7 @@ andA b1 = do
   v <- AndB b1 v0
   p <- IsParity v
   SetFlag Cpu.PF p
-  saveAndSetFlagsFrom A v
+  saveAndSetFlagsFrom False A v
   resetCarry
   w <- OrB b1 v0
   aux <- TestBit w 3
@@ -587,7 +592,7 @@ addToAccWithCarry cin v1 = do
   SetFlag Cpu.CF cout
   o <- overflows cin v1 v2
   SetFlag Cpu.PF o
-  saveAndSetFlagsFrom A v
+  saveAndSetFlagsFrom False A v
   return Next
 
 
@@ -598,7 +603,7 @@ subToAccWithCarry cin v2 = do
   SetFlag Cpu.CF cout
   o <- overflows cin v1 v2
   SetFlag Cpu.PF o
-  saveAndSetFlagsFrom A v
+  saveAndSetFlagsFrom True A v
   return Next
 
 
@@ -652,23 +657,23 @@ pushReturn = do
 
 
 
-saveAndSetFlagsFrom :: RegSpec -> Byte p -> Eff p ()
-saveAndSetFlagsFrom reg v = do
+saveAndSetFlagsFrom :: Bool -> RegSpec -> Byte p -> Eff p ()
+saveAndSetFlagsFrom nf reg v = do
   save reg v
-  setFlagsFrom v
+  setFlagsFrom nf v
 
-setFlagsFrom :: Byte p -> Eff p ()
-setFlagsFrom value = do
+setFlagsFrom :: Bool -> Byte p -> Eff p ()
+setFlagsFrom nf value = do
   s <- IsSigned value
   z <- IsZero value
   x <- TestBit value 3
   y <- TestBit value 5
+  n <- MakeBit nf
   SetFlag Cpu.SF s
   SetFlag Cpu.ZF z
   SetFlag Cpu.XF x
   SetFlag Cpu.YF y
-  false <- MakeBit False -- TODO: set NF correctly
-  SetFlag Cpu.NF false
+  SetFlag Cpu.NF n
 
 
 pushStack :: Byte p -> Eff p ()

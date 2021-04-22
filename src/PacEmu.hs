@@ -39,7 +39,7 @@ emulate Conf{stop,trace} = do
       Z.WriteMem a b i -> do mem <- Mem.writeIO (mem s) a b; loop s { mem } i
 
       Z.OutputPort port val i -> do
-        print ("OutputPort",steps,cycles,port,val)
+        --print ("OutputPort",steps,cycles,port,val)
         if port /= 0 then error "OutputPort, port!=0" else
           loop s { iData = val } i
 
@@ -47,7 +47,7 @@ emulate Conf{stop,trace} = do
         let cycles' = cycles + n
         if cycles' >= cyclesPerFrame
           then do
-          print ("Advance/Interrupt",steps,cycles,iData)
+          --print ("Advance/Interrupt",steps,cycles,iData)
           loop s { cycles = cycles' - cyclesPerFrame } (f (Just iData))
           else loop s { cycles = cycles' } (f Nothing)
           where

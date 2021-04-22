@@ -52,10 +52,10 @@ endRam = 0x5100
 writeIO :: Mem -> Addr -> Byte -> IO Mem
 writeIO m a b = if
   | a == 0xFFFE -> do
-      print ("expected bad Mem.write",a,b)
+      --print ("expected bad Mem.write",a,b)
       pure m
   | a == 0xFFFD -> do
-      print ("expected bad Mem.write",a,b)
+      --print ("expected bad Mem.write",a,b)
       pure m
   | otherwise -> do
       --print ("Mem.write",a,b)
