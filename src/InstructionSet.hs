@@ -149,7 +149,7 @@ cycles jumpTaken = \case
   Op0 LDAX{} -> 7
   Op2 LHLD -> 16
   Op2 LDA -> 13
-  Op0 DCX{} -> 5
+  Op0 DCX{} -> 6 --8080: was 5
   Op0 RRC -> 4
   Op0 RAR -> 4
   Op0 CMA -> 4
