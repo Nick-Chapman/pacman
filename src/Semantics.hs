@@ -464,10 +464,9 @@ execute1 op1 b1 = case op1 of
     binop XorB b1
   CPI -> do
     b <- load A
-    (v,borrow) <- subtract b b1 -- set hf here..
+    (v,borrow) <- subtract b b1
     setFlagsFrom True v
     SetFlag Cpu.CF borrow
-    GetFlag Cpu.HF >>= Flip >>= SetFlag Cpu.HF -- and then flip hf here
     x <- TestBit b1 3
     SetFlag Cpu.XF x
     y <- TestBit b1 5
@@ -615,7 +614,7 @@ subWithCarry cin v1 v2 = do
   cin' <- Flip cin
   v2comp <- Complement v2
   (v,cout) <- AddWithCarry cin' v1 v2comp -- TODO: abstract/share add(with flags)
-  aux <- carryBit 4 cin' v1 v2comp
+  aux <- carryBit 4 cin' v1 v2comp >>= Flip
   SetFlag Cpu.HF aux
   o <- overflows cin' v1 v2comp
   SetFlag Cpu.PF o
