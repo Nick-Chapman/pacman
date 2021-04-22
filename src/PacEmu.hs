@@ -1,6 +1,7 @@
 
 module PacEmu (Conf(..),emulate,DisControl(..)) where
 
+import Control.Monad (when)
 import Byte (Byte)
 import InstructionSet (dis1)
 import Mem (Mem)
@@ -10,14 +11,15 @@ import qualified Mem (init,readIO,writeIO,read)
 import qualified ZEmu as Z (State,Interaction(..),interaction,programCounter)
 
 data Conf = Conf
-  { stop :: Maybe Int --steps
-  , trace :: Maybe (Handle, Maybe Int) --steps
+  { stop :: Int --frame#
+  , trace :: Maybe (Handle, Int) --frame# begin trace
+  , disControl :: DisControl
   }
 
 data DisControl = DisOn | DisOff
 
 emulate :: Conf -> IO ()
-emulate Conf{stop,trace} = do
+emulate Conf{stop,trace,disControl} = do
   state0 <- initState
   loop state0 Z.interaction
   where
@@ -25,14 +27,13 @@ emulate Conf{stop,trace} = do
     loop s@State{frames,steps,cycles,iData} = \case
 
       Z.Trace z i -> do
-        let doStop = case stop of Just i -> (steps > i); Nothing -> False
+        let doStop = frames >= stop
         if doStop then print ("STOP",steps,cycles) else do
           case trace of
             Nothing -> pure ()
-            Just (handle,disFrom) -> do
-              let doDis = case disFrom of Just i -> (steps > i); Nothing -> False
-              let disControl = if doDis then DisOn else DisOff
-              hPutStrLn handle (traceLine disControl s z)
+            Just (handle,ff) -> do
+              when (frames >= ff) $
+                hPutStrLn handle (traceLine disControl s z)
           loop s { steps = steps + 1 } i
 
       Z.ReadMem a f -> do b <- Mem.readIO (mem s) a; loop s (f b)
@@ -48,8 +49,9 @@ emulate Conf{stop,trace} = do
         if cycles' >= cyclesPerFrame
           then do
           --print ("Advance/Interrupt",frames,steps,cycles,iData)
-          putStrLn $ "frame: " ++ show frames
-          loop s { frames = frames + 1, cycles = cycles' - cyclesPerFrame } (f (Just iData))
+          let frames' = frames + 1
+          putStrLn $ "frame: " ++ show frames'
+          loop s { frames = frames', cycles = cycles' - cyclesPerFrame } (f (Just iData))
           else loop s { cycles = cycles' } (f Nothing)
           where
             cyclesPerFrame = 3072000 `div` 60
