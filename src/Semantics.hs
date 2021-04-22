@@ -240,6 +240,10 @@ execute0 = \case
     (v,borrow) <- subtract v1 v2
     setFlagsFrom True v
     SetFlag Cpu.CF borrow
+    x <- TestBit v2 3
+    SetFlag Cpu.XF x
+    y <- TestBit v2 5
+    SetFlag Cpu.YF y
     return Next
   RCond cond -> do
     executeCond cond >>= CaseBit >>= \case
