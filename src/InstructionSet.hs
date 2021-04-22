@@ -181,7 +181,7 @@ cycles jumpTaken = \case
   Op1 SUI -> 7
   Op1 ANI -> 7
   Op1 ORI -> 7
-  Op0 RST{} -> 4
+  Op0 RST{} -> 11 --8080: was 4
   Op0 RET -> 10
   Op0 PCHL -> 5
   Op0 SPHL -> 5
