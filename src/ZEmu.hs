@@ -41,7 +41,7 @@ type PendingInterrupt = Byte
 data State = State
   { cpu :: Cpu EmuTime
   , halted :: Bool
-  , interrupts_enabled :: Bool -- TODO: move inside cpu?
+  , iff1 :: Bool -- TODO: move inside cpu?
   , interrupt_mode :: Int  -- TODO: move inside cpu?
   , interrupt_data :: Maybe Byte
   }
@@ -60,7 +60,7 @@ initState = do
   State
     { cpu = cpu0
     , halted = False
-    , interrupts_enabled = False
+    , iff1 = False
     , interrupt_mode = 0 -- TODO: ?
     , interrupt_data = Nothing
     }
@@ -103,14 +103,18 @@ interaction = emulate initState
       E.PortOutput p v -> do
         OutputPort p v (k s ())
 
-      E.IsInterrupt -> k s { interrupt_data = Nothing } (interrupt_data s)
+      E.IsInterrupt ->
+        case iff1 s of
+          False -> k s Nothing
+          True -> k s { interrupt_data = Nothing } (interrupt_data s)
 
       E.IsHalted -> k s (halted s)
       E.SetHalted -> k s { halted = True } ()
       E.SetUnHalted -> k s { halted = False } ()
 
-      E.EnableInterrupts -> k s { interrupts_enabled = True } ()
-      E.DisableInterrupts -> k s { interrupts_enabled = False } ()
+      E.SetIff1 bool -> k s { iff1 = bool } ()
+      E.GetIff1 -> k s (iff1 s)
+
       E.SetInterruptMode i -> k s { interrupt_mode = i } ()
 
       E.Decode byte -> k s (decode byte)

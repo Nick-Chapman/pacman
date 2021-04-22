@@ -32,8 +32,9 @@ data Eff p a where
   SetHalted :: Eff p ()
   SetUnHalted :: Eff p ()
 
-  EnableInterrupts :: Eff p ()
-  DisableInterrupts :: Eff p ()
+  SetIff1 :: Bool -> Eff p () -- TODO: iff2
+  GetIff1 :: Eff p Bool
+
   SetInterruptMode :: Int -> Eff p ()
 
   Decode :: Byte p -> Eff p (Either Prefix Op)

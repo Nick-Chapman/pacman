@@ -52,15 +52,18 @@ endRam = 0x5100
 writeIO :: Mem -> Addr -> Byte -> IO Mem
 writeIO m a b = if
   | a == 0xFFFE -> do
-      --print ("expected bad Mem.write",a,b)
+      errLikeZazu a b
       pure m
   | a == 0xFFFD -> do
-      --print ("expected bad Mem.write",a,b)
+      errLikeZazu a b
       pure m
   | otherwise -> do
-      --print ("Mem.write",a,b)
       let! m' = write m a b
       pure m'
+
+errLikeZazu :: Addr -> Byte -> IO ()
+errLikeZazu a b = putStrLn $ "ERR: write " ++ show b ++ " at " ++ show a
+
 
 readIO :: Mem -> Addr -> IO Byte
 readIO m a = do

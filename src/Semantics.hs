@@ -23,6 +23,7 @@ fetchDecodeExec = do
     Just byte -> do
       -- TODO: check interrupt mode
       SetUnHalted
+      SetIff1 False
       Advance 23 -- TODO: ?
       hi <- GetReg Cpu.I
       vec0 <- MakeAddr $ HiLo{hi,lo = byte}
@@ -272,7 +273,7 @@ execute0 = \case
     save H stack1
     return Next
   DI -> do
-    DisableInterrupts
+    SetIff1 False
     return Next
   PUSH rp -> do
     HiLo{hi,lo} <-
@@ -322,7 +323,7 @@ execute0 = \case
     save L e
     return Next
   EI -> do
-    EnableInterrupts
+    SetIff1 True
     return Next
   IM2 -> do
     SetInterruptMode 2
