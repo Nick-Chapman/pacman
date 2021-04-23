@@ -1,73 +1,74 @@
 
-module PacEmu (Conf(..),emulate,DisControl(..)) where
+module PacEmu (
+  init,State,
+  Conf(..), DisControl(..),emulateOneFrame,
+  ) where
 
-import Control.Monad (when)
 import Byte (Byte)
 import InstructionSet (dis1)
 import Mem (Mem)
+import Prelude hiding (init)
 import System.IO (Handle,hPutStrLn)
 import Text.Printf (printf)
-import qualified Mem (init,readIO,writeIO,read)
+import qualified Mem (readIO,writeIO,read)
 import qualified ZEmu as Z (State,Interaction(..),interaction,programCounter)
 
-data Conf = Conf
-  { stop :: Int --frame#
-  , trace :: Maybe (Handle, Int) --frame# begin trace
-  , disControl :: DisControl
+data State = State
+  { steps :: Int
+  , cycles :: Int
+  , iData :: Byte
+  , mem :: Mem
+  , interaction :: Z.Interaction
   }
 
+init :: Mem -> State
+init mem = do
+  State
+    { steps = 0
+    , cycles = 0
+    , iData = 0
+    , mem
+    , interaction = Z.interaction
+    }
+
+data Conf = Conf { trace :: Maybe (Handle, DisControl) }
 data DisControl = DisOn | DisOff
 
-emulate :: Conf -> IO ()
-emulate Conf{stop,trace,disControl} = do
-  state0 <- initState
-  loop state0 Z.interaction
+emulateOneFrame :: Conf -> State -> IO State
+emulateOneFrame Conf{trace} state0 = do
+  loop state0
   where
-    loop :: State -> Z.Interaction -> IO ()
-    loop s@State{frames,steps,cycles,iData} = \case
+    loop :: State -> IO State
+    loop s@State{steps,cycles,iData,interaction} = case interaction of
 
-      Z.Trace z i -> do
-        let doStop = frames >= stop
-        if doStop then print ("STOP",steps,cycles) else do
-          case trace of
-            Nothing -> pure ()
-            Just (handle,ff) -> do
-              when (frames >= ff) $
-                hPutStrLn handle (traceLine disControl s z)
-          loop s { steps = steps + 1 } i
+      Z.Trace z interaction -> do
+        case trace of
+          Nothing -> pure ()
+          Just (handle,disControl) -> do
+            hPutStrLn handle (traceLine disControl s z)
+        loop s { steps = steps + 1, interaction }
 
-      Z.ReadMem a f -> do b <- Mem.readIO (mem s) a; loop s (f b)
-      Z.WriteMem a b i -> do mem <- Mem.writeIO (mem s) a b; loop s { mem } i
+      Z.ReadMem a f -> do b <- Mem.readIO (mem s) a; loop s { interaction = f b }
+      Z.WriteMem a b interaction -> do
+        mem <- Mem.writeIO (mem s) a b; loop s { mem, interaction }
 
-      Z.OutputPort port val i -> do
+      Z.OutputPort port val interaction -> do
         --print ("OutputPort",steps,cycles,port,val)
         if port /= 0 then error "OutputPort, port!=0" else
-          loop s { iData = val } i
+          loop s { iData = val, interaction }
 
       Z.Advance n f -> do
-        let cycles' = cycles + n
-        if cycles' >= cyclesPerFrame
-          then do
-          --print ("Advance/Interrupt",frames,steps,cycles,iData)
-          let frames' = frames + 1
-          putStrLn $ "frame: " ++ show frames'
-          loop s { frames = frames', cycles = cycles' - cyclesPerFrame } (f (Just iData))
-          else loop s { cycles = cycles' } (f Nothing)
-          where
-            cyclesPerFrame = 3072000 `div` 60
+        case cycles + n >= cyclesPerFrame of
+          False ->
+            -- keep looping
+            loop s { cycles = cycles + n, interaction = f Nothing }
+          True -> do
+            -- end loop
+            pure s { cycles = cycles + n - cyclesPerFrame , interaction = f (Just iData)}
 
-data State = State
-  { frames :: Int
-  , steps :: Int
-  , cycles :: Int
-  , mem :: Mem
-  , iData :: Byte
-  }
+      where
+        cyclesPerFrame = 3072000 `div` 60
 
-initState :: IO State
-initState = do
-  mem <- Mem.init
-  pure $ State { frames = 0, steps = 0, cycles = 0, mem, iData = 0}
 
 traceLine :: DisControl -> State -> Z.State -> String
 traceLine disControl s@State{steps,cycles} z = do
