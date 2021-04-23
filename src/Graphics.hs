@@ -1,27 +1,88 @@
 
-module Graphics (main) where
+module Graphics (emulate,mock) where
 
+import Addr (Addr(..))
+import Byte (Byte(..))
 import Control.Concurrent (threadDelay)
 import Control.Monad (ap,liftM)
 import Data.Bits (testBit)
 import Data.List (transpose)
 import Data.Map (Map)
 import Foreign.C.Types (CInt)
+import Mem (Mem)
 import Rom (Rom)
 import SDL (Renderer,Rectangle(..),V2(..),V4(..),Point(P),($=))
-import Addr (Addr(..))
-import Byte (Byte(..))
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text (pack)
+import qualified Mem (init,read,write)
+import qualified PacEmu as Pac
 import qualified Rom (load,lookup)
 import qualified SDL
 
-main :: IO ()
-main = do
+emulate :: IO ()
+emulate = do
   putStrLn "*pacman*"
-  m <- initMachine
-  picture <- run m seeScreen
-  display picture
+  mem <- Mem.init
+  m <- initMachine mem
+  runDisplay True m
+
+mock :: IO ()
+mock = do
+  putStrLn "*pacman-mock*"
+  mem <- Mem.init
+  dump <- Rom.load 2048 "dump"
+  mem <- pure $ loadVramDumpIntoMem dump mem
+  mem <- pure $ loadSpriteDumpIntoMem mem
+  m <- initMachine mem
+  runDisplay False m
+
+loadVramDumpIntoMem :: Rom -> Mem -> Mem
+loadVramDumpIntoMem dump mem =
+  foldl step mem [0..2047]
+  where
+    step :: Mem -> Int -> Mem
+    step mem i = Mem.write mem (fromIntegral i + baseVideoRam) (Rom.lookup dump i)
+
+loadSpriteDumpIntoMem :: Mem -> Mem
+loadSpriteDumpIntoMem mem =
+  foldl step mem (Map.toList spriteAddrDump)
+  where
+    step :: Mem -> (Addr,Byte) -> Mem
+    step mem (a,b) = Mem.write mem a b
+
+spriteAddrDump :: Map Addr Byte
+spriteAddrDump = Map.fromList
+  [ (0x4ff0, 0x00) , (0x4ff1, 0x00) , (0x4ff2, 0x94) , (0x4ff3, 0x01)
+  , (0x4ff4, 0x94) , (0x4ff5, 0x03) , (0x4ff6, 0x8c) , (0x4ff7, 0x05)
+  , (0x4ff8, 0x8c) , (0x4ff9, 0x07) , (0x4ffa, 0xb8) , (0x4ffb, 0x09)
+  , (0x4ffc, 0xfc) , (0x4ffd, 0x00) , (0x4ffe, 0x00) , (0x4fff, 0x00)
+  , (0x5060, 0x00) , (0x5061, 0x00) , (0x5062, 0xb6) , (0x5063, 0x8c)
+  , (0x5064, 0xa1) , (0x5065, 0xa4) , (0x5066, 0x97) , (0x5067, 0x8e)
+  , (0x5068, 0x77) , (0x5069, 0x8e) , (0x506a, 0xa3) , (0x506b, 0x2c)
+  , (0x506c, 0x07) , (0x506d, 0x08) , (0x506e, 0x00) , (0x506f, 0x00)
+  ]
+
+data Machine = Machine
+  { colRom :: Rom
+  , palRom :: Rom
+  , tileRom :: Rom
+  , spriteRom :: Rom
+  , mem :: Mem
+  , ps :: Pac.State
+  }
+
+initMachine :: Mem -> IO Machine
+initMachine mem = do
+  colRom <- Rom.load 32 "roms/82s123.7f"
+  palRom <- Rom.load 256 "roms/82s126.4a"
+  tileRom <- Rom.load 4096 "roms/pacman.5e"
+  spriteRom <- Rom.load 4096 "roms/pacman.5f"
+  let ps = Pac.init mem
+  pure $ Machine { colRom, palRom, tileRom, spriteRom, mem, ps }
+
+readMem :: Machine -> Addr -> Byte
+readMem Machine{mem} a = Mem.read mem a
+
 
 seeScreen :: Prog Picture
 seeScreen = do
@@ -43,7 +104,7 @@ drawSprite i = do
   let y0 = fromIntegral (32*8 + 16 - yLoc)
   palette <- readPalette (makePI (fromIntegral palb))
   sprite <- readSprite (SI spriteIndex)
-  let (Sprite piis) = if xFlip||yFlip then undefined else sprite -- TODO
+  let (Sprite piis) = if xFlip||yFlip then sprite else sprite -- TODO flip!
   let xys = [ XY (x+x0) (y+y0) | y <- [0..15] , x <- [0..15]]
   sequence_ [ SetPixel xy rgb
             | (xy,pii) <- zip xys piis
@@ -191,68 +252,6 @@ instance Functor Prog where fmap = liftM
 instance Applicative Prog where pure = return; (<*>) = ap
 instance Monad Prog where return = Ret; (>>=) = Bind
 
-data Machine = Machine
-  { colRom :: Rom
-  , palRom :: Rom
-  , tileRom :: Rom
-  , spriteRom :: Rom
-  , mem :: Mem
-  }
-
-data Mem = Mem { dump :: Rom }
-
-readMem :: Mem -> Addr -> Byte
-readMem Mem{dump} a =
-  case Map.lookup a spriteAddrDump of
-    Just b -> b
-    Nothing -> Rom.lookup dump (fromIntegral (a - baseVideoRam))
-
-
-spriteAddrDump :: Map Addr Byte
-spriteAddrDump = Map.fromList
-  [ (0x4ff0, 0x00)
-  , (0x4ff1, 0x00)
-  , (0x4ff2, 0x94)
-  , (0x4ff3, 0x01)
-  , (0x4ff4, 0x94)
-  , (0x4ff5, 0x03)
-  , (0x4ff6, 0x8c)
-  , (0x4ff7, 0x05)
-  , (0x4ff8, 0x8c)
-  , (0x4ff9, 0x07)
-  , (0x4ffa, 0xb8)
-  , (0x4ffb, 0x09)
-  , (0x4ffc, 0xfc)
-  , (0x4ffd, 0x00)
-  , (0x4ffe, 0x00)
-  , (0x4fff, 0x00)
-  , (0x5060, 0x00)
-  , (0x5061, 0x00)
-  , (0x5062, 0xb6)
-  , (0x5063, 0x8c)
-  , (0x5064, 0xa1)
-  , (0x5065, 0xa4)
-  , (0x5066, 0x97)
-  , (0x5067, 0x8e)
-  , (0x5068, 0x77)
-  , (0x5069, 0x8e)
-  , (0x506a, 0xa3)
-  , (0x506b, 0x2c)
-  , (0x506c, 0x07)
-  , (0x506d, 0x08)
-  , (0x506e, 0x00)
-  , (0x506f, 0x00)
-  ]
-
-initMachine :: IO Machine
-initMachine = do
-  colRom <- Rom.load 32 "roms/82s123.7f"
-  palRom <- Rom.load 256 "roms/82s126.4a"
-  tileRom <- Rom.load 4096 "roms/pacman.5e"
-  spriteRom <- Rom.load 4096 "roms/pacman.5f"
-  dump <- Rom.load 2048 "dump"
-  let mem = Mem { dump }
-  pure $ Machine { colRom, palRom, tileRom, spriteRom, mem } where
 
 data Screen = Screen { m :: Map XY RGB }
 
@@ -275,7 +274,7 @@ state0 :: State
 state0 = State { screen = screen0 }
 
 run :: Machine -> Prog a -> IO a
-run Machine{colRom,palRom,tileRom,spriteRom,mem} prog0 = eval prog0 state0 (\_ -> pure)
+run m@Machine{colRom,palRom,tileRom,spriteRom} prog0 = eval prog0 state0 (\_ -> pure)
   where
   eval :: Prog b -> State -> (State -> b -> IO a) -> IO a
   eval prog s k = case prog of
@@ -286,7 +285,7 @@ run Machine{colRom,palRom,tileRom,spriteRom,mem} prog0 = eval prog0 state0 (\_ -
     ReadPalRom i -> k s (Rom.lookup palRom i)
     ReadTileRom i -> k s (Rom.lookup tileRom i)
     ReadSpriteRom i -> k s (Rom.lookup spriteRom i)
-    ReadMem a -> k s (readMem mem a)
+    ReadMem a -> k s (readMem m a)
     SetPixel xy rgb -> k s { screen = setScreenPixel (screen s) xy rgb } ()
     GetScreen -> k s (screen s)
 
@@ -297,8 +296,8 @@ data Picture where
 data XY = XY { x :: Int, y :: Int } deriving (Eq,Ord,Show)
 data RGB = RGB { r :: Byte, g :: Byte, b :: Byte } deriving Show
 
-display :: Picture -> IO ()
-display picture = do
+runDisplay :: Bool -> Machine -> IO ()
+runDisplay doEmu m0 = do
   SDL.initializeAll
   let sf = 3
   let screenW = 8 * (28 + 2)
@@ -309,17 +308,28 @@ display picture = do
   renderer <- SDL.createRenderer win (-1) SDL.defaultRenderer
   let assets = DrawAssets { renderer, sf }
   let
-    loop :: Int -> IO ()
-    loop i = do
+    loop :: Machine -> Int -> IO ()
+    loop m frame = do
       events <- SDL.pollEvents
       if containsQuit events then pure () else do
+        putStrLn $ "frame: " ++ show frame
+        picture <- run m seeScreen
         drawEverything assets picture
-        threadDelay (1000000 `div` 60)
-        loop (i+1)
-  loop 0
+        let _ = threadDelay (1000000 `div` 60) -- no delay
+
+        m <- case doEmu of
+          False -> pure m
+          True -> do
+            ps <- Pac.emulateOneFrame Pac.Conf { trace = Nothing } (ps m)
+            pure $ m { ps, mem = Pac.mem ps }
+
+        loop m (frame+1)
+
+  loop m0 0
   SDL.destroyRenderer renderer
   SDL.destroyWindow win
   SDL.quit
+
 
 containsQuit :: [SDL.Event] -> Bool
 containsQuit = \case

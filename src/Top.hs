@@ -4,19 +4,19 @@ module Top (main) where
 import InstructionSet (theDecodeTable)
 import PacEmu (DisControl(..))
 import System.IO (stdout)
-import qualified Graphics (main)
+import qualified Graphics (mock,emulate)
 import qualified Mem (init)
 import qualified PacEmu as Pac (init,State,emulateOneFrame,Conf(..))
 
 main :: IO ()
 main = do
   let _ = print theDecodeTable
-  let _ = (stdout,DisOff)
-  let _ = Graphics.main
-  emulate
+  let _ = Graphics.mock
+  Graphics.emulate
+  let _ = emulate
   pure ()
 
-emulate :: IO ()
+emulate :: IO () -- non-graphical emulation, with tracing
 emulate = do
   mem <- Mem.init
   let s0 = Pac.init mem

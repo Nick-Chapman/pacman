@@ -1,6 +1,6 @@
 
 module PacEmu (
-  init,State,
+  init,State (mem),
   Conf(..), DisControl(..),emulateOneFrame,
   ) where
 
