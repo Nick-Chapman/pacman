@@ -9,6 +9,8 @@ import qualified Graphics (mock,emulate)
 import qualified Mem (init)
 import qualified PacEmu as Pac (init,State,emulateOneFrame,Conf(..))
 
+import qualified Hdl_play as Hdl (main)
+
 main :: IO ()
 main = do
   args <- getArgs
@@ -17,15 +19,17 @@ main = do
     Trace -> traceEmu
     Mock -> Graphics.mock
     Graphics -> Graphics.emulate
+    Hdl -> Hdl.main
 
-data Mode = DecodeTable | Trace | Mock | Graphics
+data Mode = DecodeTable | Trace | Mock | Graphics | Hdl
 
 parseArgs :: [String] -> Mode
 parseArgs = \case
   ["tab"] -> DecodeTable
   ["trace"] -> Trace
   ["mock"] -> Mock
-  [] -> Graphics
+  ["graphics"] -> Graphics
+  [] -> Hdl
   xs -> error (show ("parseArgs",xs))
 
 traceEmu :: IO ()
