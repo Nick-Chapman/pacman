@@ -10,6 +10,7 @@ import qualified Mem (init)
 import qualified PacEmu as Pac (init,State,emulateOneFrame,Conf(..))
 
 import qualified Hdl_play as Hdl (main)
+import qualified NewGraphics (mock)
 
 main :: IO ()
 main = do
@@ -20,8 +21,9 @@ main = do
     Mock -> Graphics.mock
     Graphics -> Graphics.emulate
     Hdl -> Hdl.main
+    Video -> NewGraphics.mock
 
-data Mode = DecodeTable | Trace | Mock | Graphics | Hdl
+data Mode = DecodeTable | Trace | Mock | Graphics | Hdl | Video
 
 parseArgs :: [String] -> Mode
 parseArgs = \case
@@ -29,7 +31,8 @@ parseArgs = \case
   ["trace"] -> Trace
   ["mock"] -> Mock
   ["graphics"] -> Graphics
-  [] -> Hdl
+  ["hdl"] -> Hdl
+  [] -> Video
   xs -> error (show ("parseArgs",xs))
 
 traceEmu :: IO ()
