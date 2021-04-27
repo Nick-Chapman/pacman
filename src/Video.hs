@@ -6,16 +6,18 @@ module Video (
   ) where
 
 import Control.Monad (ap,liftM)
+import Data.Bits
 import Data.Map (Map)
-import Data.Word8 (Word8)
+import Machine (Machine(..))
 import qualified Data.Map.Strict as Map
+import qualified Rom
 
 ----------------------------------------------------------------------
 -- Effects
 
 class Phase p where
-  type Number p
-  type Byte p
+  type Number p -- model as a list of Bits?
+  type Bit p
 
 instance Functor (Eff p) where fmap = liftM
 instance Applicative (Eff p) where pure = return; (<*>) = ap
@@ -25,10 +27,12 @@ data Eff p a where
   Ret :: a -> Eff p a
   Bind :: Eff p a -> (a -> Eff p b) -> Eff p b
   LitI :: Int -> Eff p (Number p)
-  LitB :: Word8 -> Eff p (Byte p)
-  SetPixel :: Number p -> Number p -> RGB (Byte p) -> Eff p ()
+  SetPixel :: Number p -> Number p -> RGB (Number p) -> Eff p ()
   Add :: Number p -> Number p -> Eff p (Number p)
   Mul :: Number p -> Number p -> Eff p (Number p)
+  PickBit :: Number p -> Int -> Eff p (Bit p)
+  CaseBit :: Bit p -> Eff p (Bool)
+  ReadColRom :: Number p -> Eff p (Number p)
 
 ----------------------------------------------------------------------
 -- compile Effect to Program
@@ -36,7 +40,7 @@ data Eff p a where
 data CompileTime
 instance Phase CompileTime where
   type Number CompileTime = AtomInt
-  type Byte CompileTime = AtomByte
+  type Bit CompileTime = AtomBit
 
 compile :: Eff CompileTime () -> Prog
 compile eff0 = do
@@ -46,10 +50,16 @@ compile eff0 = do
       Ret a -> k s a
       Bind e f -> loop s e (\s a -> loop s (f a) k)
       LitI i -> k s (A_LitI i)
-      LitB b -> k s (A_LitB b)
       SetPixel x y col -> P_SetPixel x y col (k s ())
       Mul a1 a2 -> do compileFormI s (MulI a1 a2) k
       Add a1 a2 -> do compileFormI s (AddI a1 a2) k
+      PickBit a i -> k s (A_Picked i a)
+      CaseBit a -> do P_If a (k s True) (k s False)
+
+      ReadColRom a -> do
+        genSym s $ \s sym -> do
+          P_Let sym (R_ReadColRom a) $
+            k s (A_SymI sym)
 
   loop CompileState { u = 1 } eff0 (\_ () -> P_Halt)
 
@@ -59,7 +69,7 @@ compileFormI s form k = do
     Just cf -> k s (A_LitI (evFormI cf))
     Nothing -> do
       genSym s $ \s sym -> do -- TODO: smart share, only when not atomic
-        P_Let sym form $ -- TODO: smart addI, fold constanst
+        P_Let sym (R_Form form) $ -- TODO: smart addI, fold constanst
           k s (A_SymI sym)
 
 genSym :: CS -> (CS -> Sym -> r) -> r
@@ -72,8 +82,14 @@ data CS = CompileState { u :: Int }
 
 data Prog
   = P_Halt
-  | P_SetPixel AtomInt AtomInt (RGB AtomByte) Prog
-  | P_Let Sym (FormI AtomInt) Prog
+  | P_SetPixel AtomInt AtomInt (RGB AtomInt) Prog
+  | P_Let Sym Rhs Prog
+  | P_If AtomBit Prog Prog
+  deriving Show
+
+data Rhs
+  = R_Form (FormI AtomInt)
+  | R_ReadColRom AtomInt
   deriving Show
 
 data AtomInt
@@ -81,9 +97,9 @@ data AtomInt
   | A_SymI Sym
   deriving Show
 
-data AtomByte
-  = A_LitB Word8
---  | A_SymB Sym
+data AtomBit
+  = A_LitBit Bool
+  | A_Picked Int AtomInt
   deriving Show
 
 newtype Sym = Sym { unSym :: String } deriving (Eq,Ord,Show)
@@ -113,20 +129,26 @@ tryConstFold = \case
 ----------------------------------------------------------------------
 -- run a Program; generate a Picture
 
-run :: Prog -> Picture
-run = do
+run :: Machine -> Prog -> Picture
+run Machine{colRom} = do
   let
-    evA :: AtomByte -> Word8
-    evA = \case
-      A_LitB x -> x
-  let
+    evB :: RS -> AtomBit -> Bool
+    evB s = \case
+      A_LitBit bool -> bool
+      A_Picked index ai -> evI s ai `testBit` index
+
     evI :: RS -> AtomInt -> Int
     evI RuntimeState{mi}= \case
       A_LitI x -> x
       A_SymI sym -> look sym mi
 
-    evRGB :: RGB AtomByte -> RGB Word8
-    evRGB = fmap evA
+    evRGB :: RS -> RGB AtomInt -> RGB Int
+    evRGB s = fmap (evI s)
+
+    evRhs :: RS -> Rhs -> Int
+    evRhs s = \case
+      R_Form form -> evFormI (fmap (evI s) form)
+      R_ReadColRom a -> fromIntegral $ Rom.lookup colRom (evI s a)
   let
     loop :: RS -> Prog -> RS
     loop s = \case
@@ -134,11 +156,14 @@ run = do
       P_SetPixel x y rgb prog -> do
         loop s
           { screen =
-            setScreenPixel (screen s) (XY (evI s x) (evI s y)) (evRGB rgb)
+            setScreenPixel (screen s) (XY (evI s x) (evI s y)) (evRGB s rgb)
           } prog
-      P_Let sym form prog -> do
-        let val :: Int = evFormI (fmap (evI s) form)
+      P_Let sym rhs prog -> do
+        let val :: Int = evRhs s rhs
         loop s { mi = Map.insert sym val (mi s) } prog
+      P_If cond p1 p2 -> do
+        let val :: Bool = evB s cond
+        loop s (if val then p1 else p2)
 
   pictureScreen . screen . loop s0
 
@@ -156,12 +181,12 @@ look k m = maybe (error (show ("look:no-value!",k))) id $ Map.lookup k m
 ----------------------------------------------------------------------
 -- Screen (canvas to collect the pixles) -- TODO: is this really needed?
 
-data Screen = Screen { m :: Map XY (RGB Word8)}
+data Screen = Screen { m :: Map XY (RGB Int)}
 
 screen0 :: Screen
 screen0 = Screen { m = Map.empty }
 
-setScreenPixel :: Screen -> XY -> RGB Word8 -> Screen
+setScreenPixel :: Screen -> XY -> RGB Int -> Screen
 setScreenPixel Screen{m} xy rgb = Screen { m = Map.insert xy rgb m }
 
 pictureScreen :: Screen -> Picture
@@ -172,7 +197,7 @@ pictureScreen Screen{m} = Pictures [ Draw (shift xy) rgb | (xy,rgb) <- Map.toLis
 ----------------------------------------------------------------------
 
 data Picture where
-  Draw :: XY -> RGB Word8 -> Picture
+  Draw :: XY -> RGB Int -> Picture
   Pictures :: [Picture] -> Picture
 
 data XY = XY { x :: Int, y :: Int } deriving (Eq,Ord,Show)

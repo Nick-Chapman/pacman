@@ -2,7 +2,6 @@
 module EmuSdl (runDisplay) where
 
 import Control.Concurrent (threadDelay)
-import Data.Word8 (Word8)
 import Foreign.C.Types (CInt)
 import Machine (Machine(ps,mem))
 import SDL (Renderer,Rectangle(..),V2(..),V4(..),Point(P),($=))
@@ -16,7 +15,7 @@ runDisplay :: Bool -> Video.Prog -> Machine -> IO ()
 runDisplay doEmu vprog m0 = do
   SDL.initializeAll
   let sf = 3
-  let screenW = 8 * (28 + 2)
+  let screenW = 8 * (28 + 2) -- +2 to give a tile width border in Grey (for dev)
   let screenH = 8 * (36 + 2)
   let windowSize = V2 (sf * screenW) (sf * screenH)
   let winConfig = SDL.defaultWindow { SDL.windowInitialSize = windowSize }
@@ -29,7 +28,7 @@ runDisplay doEmu vprog m0 = do
       events <- SDL.pollEvents
       if containsQuit events then pure () else do
         --putStrLn $ "frame: " ++ show frame
-        let picture = Video.run vprog
+        let picture = Video.run m vprog
         drawEverything assets picture
         let _ = threadDelay (1000000 `div` 60) -- no delay
 
@@ -86,10 +85,11 @@ renderPicture DrawAssets{renderer=r,sf} = traverse
         let rect = SDL.Rectangle (SDL.P (V2 x' y')) (V2 sf sf)
         SDL.fillRect r (Just rect)
 
-darkGrey :: RGB Word8
+darkGrey :: RGB Int
 darkGrey = RGB { r = 20, g = 20, b = 20 }
 
-setColor :: SDL.Renderer -> RGB Word8 -> IO ()
+setColor :: SDL.Renderer -> RGB Int -> IO ()
 setColor r c = SDL.rendererDrawColor r $= fromRGB c
   where
-    fromRGB RGB {r,g,b} = V4 r g b 255
+    fi = fromIntegral
+    fromRGB RGB {r,g,b} = V4 (fi r) (fi g) (fi b) 255

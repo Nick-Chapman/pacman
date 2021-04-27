@@ -29,7 +29,7 @@ mock = do
   putStrLn "*pacman-mock(new graphics)*"
   let eff = MyPacVideoSim.seeCols
   let vprog = Video.compile eff
-  print vprog
+  --print vprog
   mem <- Mem.init
   m <- initMachine mem
   let runEmu = False
