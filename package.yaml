@@ -46,6 +46,7 @@ default-extensions:
 - RankNTypes
 - RecursiveDo
 - ScopedTypeVariables
+- StandaloneDeriving
 - TypeApplications
 - TypeFamilies
 - UndecidableInstances
