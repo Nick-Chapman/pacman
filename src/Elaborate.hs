@@ -1,17 +1,15 @@
 module Elaborate(elab) where -- TODO: rename Compile
 
-import Types {-(
+import Types (
   -- source
   System(..),Eff(..),
   -- target
   Code(..),Prog(..),Step(..),E(..),Oper(..),
-
-  RegId(..), RegSpec(..), Reg(..),
-  TmpId(..), TmpSpec(..), Tmp(..),
+  RegId(..), SizeSpec(..), Reg(..),
+  TmpId(..), Tmp(..),
   -- runtime
-  --UpDown(..),
   Bit(..),
-  )-}
+  )
 
 elab :: System -> Code
 elab = loop ES { u = 0, regs = [] }
@@ -20,7 +18,7 @@ elab = loop ES { u = 0, regs = [] }
     loop es@ES{u,regs} = \case
       DeclareReg1 f -> do
         let regId = RegId { u }
-        let regSpec = RegSpec { size = 1 }
+        let regSpec = SizeSpec { size = 1 }
         let reg = Reg1 regId
         loop es { u = u + 1, regs = (regId,regSpec) : regs } (f reg)
       FrameEffect eff -> do
@@ -29,7 +27,7 @@ elab = loop ES { u = 0, regs = [] }
 
 data ES = ES -- elab state
   { u :: Int
-  , regs :: [(RegId,RegSpec)]
+  , regs :: [(RegId,SizeSpec)]
   }
 
 compile0 :: Eff () -> Prog
@@ -39,7 +37,7 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ () -> P_Halt)
     comp s@CS{u} eff k = case eff of
       Ret a -> k s a
       Bind e f -> comp s e $ \s a -> comp s (f a) k
-      CaseBit bit -> P_If (E_TestBit bit) (k s B1) (k s B0) -- dup s, problem?
+      CaseBit bit -> P_If (E_TestBit bit) (k s B1) (k s B0) -- dup s, re-uses tmp u, ok?
       KeyDown key -> k s (E_KeyDown key)
       SetPixel xy rgb -> P_Seq (S_SetPixel xy rgb) (k s ())
       GetReg reg -> k s (E_Reg reg)

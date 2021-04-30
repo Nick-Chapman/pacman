@@ -1,7 +1,7 @@
 
 module AnExampleSystem (small) where
 
-import Types --(System(..),Eff(..),XY(..),RGB(..),E(..),Nat,Key(..),UpDown(..),ePosInt)
+import Types (System(..),Eff(..),XY(..),RGB(..),E(..),Nat,Bit(..),Key(..),ePosInt)
 
 small :: System
 small = do
@@ -12,31 +12,24 @@ small = do
     let here = XY {x = nat 50, y = nat 75}
     let there = XY {x = nat 70, y = nat 85}
 
-    z <- KeyDown KeyZ
-
-    zLast <- GetReg zLastReg
-    makeAmove <- posEdge zLast z
-
-    moved <- GetReg movedReg
-    loc <- CaseBit moved >>= \case B0 -> pure here; B1 -> pure there
-
-    --enter <- KeyDown KeyEnter
-    --bv <- CaseBit enter >>= \case B0 -> pure 0; B1 -> pure 255
-
     let red = RGB { r = nat 255, g = nat 0, b = nat 0 }
     let green = RGB { r = nat 0, g = nat 255, b = nat 0 }
 
     x <- KeyDown KeyX
+    z <- KeyDown KeyZ
+
+    makeAmove <- posEdge (E_Reg zLastReg) z
+    SetReg zLastReg z
+
+    movedBar <- Not (E_Reg movedReg)
+    nextMoved <- mux makeAmove movedBar (E_Reg movedReg)
+    SetReg movedReg nextMoved
+
+    loc <- CaseBit (E_Reg movedReg) >>= \case B0 -> pure here; B1 -> pure there
     col <- CaseBit x >>= \case B0 -> pure red; B1 -> pure green
 
     SetPixel loc col
 
-    SetReg zLastReg z
-
-    movedBar <- Not moved
-
-    nextMoved <- mux makeAmove movedBar moved
-    SetReg movedReg nextMoved
 
 mux :: E Bit -> E Bit -> E Bit -> Eff (E Bit)
 mux sel x y = do
@@ -59,7 +52,7 @@ posEdge x y = do
 
 andG :: E Bit -> E Bit -> Eff (E Bit)
 andG = And -- TODO, to avoid another CaseBit
---andG x y = CaseBit x >>= \b -> pure $ case b of B1 -> y; B0 -> E_Lit B0
+--andG x y = CaseBit x >>= \b -> pure $ case b of B1 -> y; B0 -> E_Lit B0 -- TOOD: use to test const folding
 
 nat :: Int -> E Nat
 nat = ePosInt

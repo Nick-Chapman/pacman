@@ -8,15 +8,15 @@ import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-import Types {-(
+import Types (
   -- code
-  Code(..), Prog(..), Step(..), E(..),
-  RegId(..), RegSpec(..), Reg(..),
+  Code(..), Prog(..), Step(..), E(..), Oper(..),
+  RegId(..), TmpId(..), SizeSpec(..), Reg(..), Tmp(..),
 
   -- values
   Keys(..), XY(..),RGB(..), Bit(..),
   fromBits,
-  )-}
+  )
 
 data Context = Context -- TODO: roms will go here
 
@@ -33,7 +33,7 @@ data Picture where
 init :: Code -> IO (Context,State,Prog) -- IO to load roms from file
 init Code{entry=prog,regDecs} = do
   -- TODO: load roms, create ram,
-  let regs = Map.fromList [ (r,zeroOf size) | (r,RegSpec {size}) <- regDecs ]
+  let regs = Map.fromList [ (r,zeroOf size) | (r,SizeSpec {size}) <- regDecs ]
   pure $ (Context,State {regs},prog)
 
 zeroOf :: Int -> [Bit]
@@ -72,7 +72,6 @@ evalStep rs@RS{screen,state=s@State{regs},tmps} = \case
     rs { tmps = update tmps tmpId [evalOper rs oper] }
   S_SetReg (Reg1 regId) e ->
     rs { state = s { regs = update regs regId [evalE rs e] } }
-  --S_MemWrite a b -> undefined a b
   S_SetPixel xy rgb -> do
     rs { screen =
          setScreenPixel
@@ -83,7 +82,6 @@ evalStep rs@RS{screen,state=s@State{regs},tmps} = \case
 
 evalOper :: RS -> Oper a -> a
 evalOper rs = \case
-  O_MemRead{} -> undefined
   O_And e1 e2 -> andBit (evalE rs e1) (evalE rs e2)
 
 evalE :: RS -> E a -> a
@@ -102,7 +100,6 @@ evalE rs@RS{keys=Keys{pressed},state=State{regs},tmps} = \case
       bits -> error (show ("evalE/Tmp1",tmpId,length bits))
 
   E_Not e -> notBit (evalE rs e)
-  --E_Index i e -> undefined i e
 
 
 isOn :: Bit -> Bool
