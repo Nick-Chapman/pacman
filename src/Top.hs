@@ -3,7 +3,7 @@ module Top (main) where
 
 import Pretty (pretty)
 import System.Environment (getArgs)
-import qualified AnExampleSystem (small)
+import qualified SmallExamples
 import qualified Compile (elab)
 import qualified EmulateWithSdl (main)
 
@@ -23,7 +23,10 @@ parseArgs = \case
 again :: IO ()
 again = do
   putStrLn "*rethinking emulation types*"
-  let code = Compile.elab AnExampleSystem.small
+  let example =
+        SmallExamples.driveSquare
+        --SmallExamples.loadCols
+  let code = Compile.elab example
   putStr (pretty code)
   EmulateWithSdl.main code
   pure ()

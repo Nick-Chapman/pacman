@@ -1,12 +1,15 @@
 
-module AnExampleSystem (small) where
+module SmallExamples (driveSquare,loadCols) where
 
 import Types (System(..),Eff(..),XY(..),RGB(..),E(..),Nat,Bit(..),Key(..),
               SizeSpec(..),
               ePosInt,eNot)
 
-small :: System
-small = do
+loadCols :: System
+loadCols = undefined
+
+driveSquare :: System
+driveSquare = do
   DeclareReg1 $ \enterLastReg -> do
   DeclareReg1 $ \highReg -> do
   DeclareReg SizeSpec {size = 7} $ \xposReg -> do
