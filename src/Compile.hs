@@ -1,4 +1,4 @@
-module Elaborate(elab) where -- TODO: rename Compile
+module Compile(elab) where
 
 import Types (
   -- source
@@ -37,17 +37,29 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ () -> P_Halt)
     comp s@CS{u} eff k = case eff of
       Ret a -> k s a
       Bind e f -> comp s e $ \s a -> comp s (f a) k
-      CaseBit bit -> P_If (E_TestBit bit) (k s B1) (k s B0) -- dup s, re-uses tmp u, ok?
-      KeyDown key -> k s (E_KeyDown key)
+
       SetPixel xy rgb -> P_Seq (S_SetPixel xy rgb) (k s ())
-      GetReg reg -> k s (E_Reg reg)
       SetReg reg exp -> P_Seq (S_SetReg reg exp) (k s ())
-      Not e -> k s (E_Not e)
+
+      CaseBit bit -> do
+        case bit of
+          E_Lit B1 -> k s B1
+          E_Lit B0 -> k s B0
+          _ -> P_If bit (k s B1) (k s B0) -- dup s, re-uses tmp u, ok?
+
+      GetReg reg@Reg1{} -> do
+        let tmpId = TmpId { u }
+        let tmp = Tmp1 tmpId
+        let oper = O_Reg reg
+        P_Seq (S_Let tmp oper) $
+          k s { u = u + 1 } (E_Tmp tmp)
+
       And e1 e2 -> do
         let tmpId = TmpId { u }
         let tmp = Tmp1 tmpId
         let oper = O_And e1 e2
-        P_Seq (S_Let tmp oper) (k s { u = u + 1} (E_Tmp tmp))
+        P_Seq (S_Let tmp oper) $
+          k s { u = u + 1} (E_Tmp tmp)
 
 data CS = CS
   { u :: Int -- TODO: contiue to use same u as for reg, to unify tmp/reg-id

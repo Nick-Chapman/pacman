@@ -12,6 +12,7 @@ module Types (
   XY(..),RGB(..),
   Nat, Bit(..), Key(..), Keys(..),
 
+  eNot,
   ePosInt,
   fromBits
   ) where
@@ -33,11 +34,9 @@ data Eff a where
   Ret :: a -> Eff a
   Bind :: Eff a -> (a -> Eff b) -> Eff b
   CaseBit :: E Bit -> Eff Bit -- TODO: generalize any bounded type
-  KeyDown :: Key -> Eff (E Bit) -- TODO: also move out of Eff, and just use E
   SetPixel :: XY (E Nat) -> RGB (E Nat) -> Eff ()
-  GetReg :: Reg a -> Eff (E a) -- TODO: does this have to be in Eff -- think not
+  GetReg :: Reg a -> Eff (E a)
   SetReg :: Show a => Reg a -> E a -> Eff ()
-  Not :: E Bit -> Eff (E Bit) -- TODO: move out of effect type!
   And :: E Bit -> E Bit -> Eff (E Bit)
 
 -- full generated code. includes decs & prog
@@ -50,7 +49,7 @@ data Code = Code
 data Prog where
   P_Halt :: Prog
   P_Seq :: Step -> Prog -> Prog
-  P_If :: E Bool -> Prog -> Prog -> Prog
+  P_If :: E Bit -> Prog -> Prog -> Prog
 
 -- basic program step (statement), which is sequenced in a program
 data Step where
@@ -58,18 +57,24 @@ data Step where
   S_SetReg :: Show a => Reg a -> E a -> Step
   S_SetPixel :: XY (E Nat) -> RGB (E Nat) -> Step
 
--- operation (non atomic expression), will always be let-bound
+-- operation (non atomic/pure expression), will always be let-bound
 data Oper a where
+  O_Reg :: Reg a -> Oper a
   O_And :: E Bit -> E Bit -> Oper Bit
 
--- program expressions; atomic, so can be freely shared
+-- program expressions; atomic/pure, so can be freely shared
 data E a where
   E_KeyDown :: Key -> E Bit
-  E_TestBit :: E Bit -> E Bool
   E_Lit :: a -> E a
-  E_Reg :: Reg a -> E a
-  E_Not :: E Bit -> E Bit -- here to allow !! etc to be optimized
+  E_Not :: E Bit -> E Bit
   E_Tmp :: Tmp a -> E a
+
+eNot :: E Bit -> E Bit
+eNot = \case
+  E_Lit B1 -> E_Lit B0
+  E_Lit B0 -> E_Lit B1
+  E_Not ebar -> ebar
+  e -> E_Not e
 
 data Name a where
   N_Reg :: Reg a -> Name a
@@ -95,7 +100,7 @@ instance Show Step where
   show = \case
     S_Let tmp oper -> "let " ++ show tmp ++ " = " ++ show oper
     S_SetReg reg exp -> show reg ++ " := " ++ show exp
-    S_SetPixel xy rgb -> "pixel " ++ show xy ++ " := " ++ show rgb
+    S_SetPixel xy rgb -> "set-pixel " ++ show xy ++ " := " ++ show rgb
 
 deriving instance Show (Oper a)
 deriving instance Show a => Show (E a)

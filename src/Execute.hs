@@ -63,8 +63,8 @@ runProg rs@RS{screen,state} = \case
     runProg rs' prog
   P_If cond this that -> do
     case evalE rs cond of
-      True -> runProg rs this
-      False -> runProg rs that
+      B1 -> runProg rs this
+      B0 -> runProg rs that
 
 evalStep :: RS -> Step -> RS
 evalStep rs@RS{screen,state=s@State{regs},tmps} = \case
@@ -81,19 +81,17 @@ evalStep rs@RS{screen,state=s@State{regs},tmps} = \case
        }
 
 evalOper :: RS -> Oper a -> a
-evalOper rs = \case
+evalOper rs@RS{state=State{regs}} = \case
   O_And e1 e2 -> andBit (evalE rs e1) (evalE rs e2)
-
-evalE :: RS -> E a -> a
-evalE rs@RS{keys=Keys{pressed},state=State{regs},tmps} = \case
-  E_KeyDown key -> if Set.member key pressed then B1 else B0
-  E_TestBit e -> isOn (evalE rs e)
-  E_Lit a -> a
-  E_Reg (Reg1 regId) ->
+  O_Reg (Reg1 regId) ->
     case (look regs regId) of
       [b] -> b
       bits -> error (show ("evalE/Reg1",regId,length bits))
 
+evalE :: RS -> E a -> a
+evalE rs@RS{keys=Keys{pressed},tmps} = \case
+  E_KeyDown key -> if Set.member key pressed then B1 else B0
+  E_Lit a -> a
   E_Tmp (Tmp1 tmpId) ->
     case (look tmps tmpId) of
       [b] -> b
@@ -101,9 +99,6 @@ evalE rs@RS{keys=Keys{pressed},state=State{regs},tmps} = \case
 
   E_Not e -> notBit (evalE rs e)
 
-
-isOn :: Bit -> Bool
-isOn = \case B1 -> True; B0 -> False
 
 notBit :: Bit -> Bit
 notBit = \case B1 -> B0; B0 -> B1
