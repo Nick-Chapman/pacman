@@ -41,7 +41,20 @@ small = do
     loc <- switch high here there
     col <- switch shift green red
 
-    SetPixel loc col
+    setSquare 5 loc col
+
+
+setSquare :: Int -> XY (E Nat) -> RGB (E Nat) -> Eff ()
+setSquare width loc col = do
+  let dels = [ XY{x,y} | x <- map nat8 [0..width-1], y <- map nat8 [0..width-1] ]
+  sequence_ [do xy <- addXY loc offset; SetPixel xy col | offset <- dels]
+
+
+addXY :: XY (E Nat) -> XY (E Nat) -> Eff (XY (E Nat))
+addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
+  x <- Plus x1 x2
+  y <- Plus y1 y2
+  pure $ XY {x,y}
 
 
 -- | generic on switched type; cause code explosion
