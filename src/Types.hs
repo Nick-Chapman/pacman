@@ -2,13 +2,17 @@
 module Types (
   Eff(..), System(..),
 
-  Code(..),Step(..),Prog(..), Oper(..),E(..),Reg(..),Var(..),VarId(..),Register(..),
-  RomSpec(..), RamSpec(..),
+  Code(..),Prog(..),Step(..),Oper(..),
+  E(..), Name(..),
 
-  XY(..),RGB(..), UpDown(..),
+  RegId(..), RegSpec(..), Reg(..),
+  TmpId(..), TmpSpec(..), Tmp(..),
+
+  XY(..),RGB(..),
   Nat, Bit(..), Key(..), Keys(..),
 
-  Rom,Ram, -- TODO: need rom/ram id
+  --RomSpec(..), RamSpec(..),
+  --Rom,Ram, -- TODO: need rom/ram id
 
   ePosInt,
   fromBits
@@ -24,6 +28,7 @@ instance Monad Eff where return = Ret; (>>=) = Bind
 -- top level effect; declare regs, load rom etc
 data System
   = FrameEffect (Eff ())
+  | DeclareReg1 (Reg Bit -> System)
   -- | LoadRom RomSpec (Rom -> System)
   -- | LoadRam RamSpec (Ram -> System)
   -- | MapRam Ram Nat System
@@ -33,34 +38,32 @@ data System
 data Eff a where
   Ret :: a -> Eff a
   Bind :: Eff a -> (a -> Eff b) -> Eff b
-  GetKey :: Key -> Eff UpDown
+  CaseBit :: E Bit -> Eff Bit -- TODO: generalize any bounded type
+  KeyDown :: Key -> Eff (E Bit)
   SetPixel :: XY (E Nat) -> RGB (E Nat) -> Eff ()
+  GetReg :: Reg a -> Eff (E a) -- TODO: does this have to be in Eff -- YES for inlining
+  SetReg :: Show a => Reg a -> E a -> Eff ()
+  Not :: E Bit -> Eff (E Bit) -- TODO: move out of effect type!
+  And :: E Bit -> E Bit -> Eff (E Bit)
 
   --Repeat :: Nat -> (Nat -> Eff ()) -> Eff () -- maybe/maybe-dont unroll
-  --Nand :: E Bit -> E Bit -> Eff (E Bit)
   --Add :: E Nat -> E Nat -> Eff (E Nat)
   --Concat :: [E a] -> Eff (E [a])
   --Index :: Nat -> E [Bit] -> Eff (E Bit)
-  --GetReg :: Reg a -> Eff (E a)
-  --SetReg :: Reg a -> E a -> Eff ()
   --ReadMem :: E Nat -> Eff (E Nat)
   --WriteMem :: E Nat -> E Nat -> Eff ()
 
 
-data UpDown = Up | Down deriving Eq
-
-
 -- we can perform read/read-write ops on named rom/ram, at constant offsets
 -- but to access symbolically (E_Read/WriteMem), we need to set up the mem-mapping
-data Rom
-data Ram
-
+--data Rom
+--data Ram
 
 
 -- full generated code. includes decs; init; and progs
 data Code = Code
-  { mm :: [(Either RomSpec RamSpec, Nat)]
-  , regs :: [Register]
+  { regDecs :: [(RegId,RegSpec)]
+--  , mm :: [(Either RomSpec RamSpec, Nat)]
   , entry :: Prog
   }
 
@@ -72,57 +75,59 @@ data Prog where
 
 -- basic program step (statement), which get sequenced in a program
 data Step where
-  S_Let :: Var a -> Oper a -> Step
-  S_SetReg :: Reg a -> E a -> Step
-  S_MemWrite :: E Nat -> E Nat -> Step
+  S_Let :: Show a => Tmp a -> Oper a -> Step
+  S_SetReg :: Show a => Reg a -> E a -> Step
+  --S_MemWrite :: E Nat -> E Nat -> Step
   S_SetPixel :: XY (E Nat) -> RGB (E Nat) -> Step
 
 -- operation (non atomic expression), will be let-bound
 data Oper a where
-  O_Nand :: E Bit -> E Bit -> Oper Bit
-  O_Add :: E Nat -> E Nat -> Oper Nat
-  O_Concat :: E [[Bit]] -> Oper [Bit]
+  O_And :: E Bit -> E Bit -> Oper Bit
+  --O_Add :: E Nat -> E Nat -> Oper Nat
+  --O_Concat :: E [[Bit]] -> Oper [Bit]
   O_MemRead :: Nat -> Oper Nat
 
 -- program expressions; atomic, so can be freely shared
 data E a where
-  E_KeyDown :: Key -> E Bool
+  E_KeyDown :: Key -> E Bit
+  E_TestBit :: E Bit -> E Bool
   E_Lit :: a -> E a
   E_Reg :: Reg a -> E a
-  E_Var :: Var a -> E a
   E_Not :: E Bit -> E Bit -- here to allow !! etc to be optimized
-  E_Index :: Nat -> E [Bit] -> E Bit -- bounds check at runtime
+  E_Tmp :: Tmp a -> E a
+  --E_Index :: Nat -> E [Bit] -> E Bit -- bounds check at runtime
 
+data Name a where
+  N_Reg :: Reg a -> Name a
 
-ePosInt :: Int -> E Nat -- TODO: take required size? (as Nat)
+ePosInt :: Int -> E Nat -- TODO: take required size? (as Nat) -- move to Lib.hs
 ePosInt = E_Lit . bitsOfInt
 
---TODO: intro Name a -- for Reg/Var -- dont use terminology Var, bt instead Temp
-
--- state which persists from one clock cycle to another; a global program variable
 data Reg a where
-  Reg :: Register -> Reg [Bit]
+  --Reg :: RegSpec -> RegId -> Reg [Bit]
+  Reg1 :: RegId -> Reg Bit
 
--- a name for an expression, which may be shared; a local, let-bound variable
-data Var a where
-  Var :: VarId -> Var [Bit]
+data RegSpec = RegSpec { size :: Int }
+data RegId = RegId { u :: Int } deriving (Eq,Ord)
+
+data Tmp a where
+  --Tmp :: TmpSpec -> TmpId -> Tmp [Bit]
+  Tmp1 :: TmpId -> Tmp Bit
+
+data TmpSpec = TmpSpec { size :: Int }
+data TmpId = TmpId { u :: Int } deriving (Eq,Ord)
 
 
-data VarId = VarId { size :: Int, u :: Int }
-
-data Register = Register { size :: Int, name :: String }
 
 data Key = KeyEnter | KeyZ | KeyX deriving (Eq,Ord,Enum,Bounded)
-
 newtype Keys = Keys { pressed :: Set Key } deriving Show
-
 data XY a = XY { x :: a, y :: a } deriving (Eq,Ord,Functor)
 data RGB a = RGB { r :: a, g :: a, b :: a } deriving (Functor)
 
-data RomSpec = RomSpec { path :: String, size :: Int }
-data RamSpec = RamSpec { size :: Int }
+--data RomSpec = RomSpec { path :: String, size :: Int }
+--data RamSpec = RamSpec { size :: Int }
 
-type Nat = [Bit] -- helpful?
+type Nat = [Bit]
 
 data Bit = B0 | B1
   deriving Eq
@@ -149,23 +154,25 @@ deriving instance Show Prog
 
 instance Show Step where
   show = \case
-    S_Let{} -> undefined
-    S_SetReg{} -> undefined
-    S_MemWrite{} -> undefined
+    S_Let tmp oper -> show ("S_Let",tmp,oper)
+    S_SetReg reg exp -> show ("SetReg",reg,exp)
+    --S_MemWrite{} -> undefined
     S_SetPixel xy rgb -> show ("SetPixel",xy,rgb)
 
 deriving instance Show a => Show (Oper a)
 deriving instance Show a => Show (E a)
-deriving instance Show (Var a)
-deriving instance Show (Reg a)
 
-deriving instance Show Register
-deriving instance Show VarId
+deriving instance Show (Tmp a)
+deriving instance Show TmpId
+
+deriving instance Show (Reg a)
+deriving instance Show RegSpec
+deriving instance Show RegId
+
 deriving instance Show Bit
 deriving instance Show Key
-deriving instance Show UpDown
-deriving instance Show RomSpec
-deriving instance Show RamSpec
+--deriving instance Show RomSpec
+--deriving instance Show RamSpec
 
 deriving instance Show a => Show (XY a)
 deriving instance Show a => Show (RGB a)
