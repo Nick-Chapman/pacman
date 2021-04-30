@@ -14,7 +14,10 @@ module Types (
 
   eNot,
   ePosInt,
-  fromBits
+  fromBits,
+  bitsOfInt,
+  size1,
+
   ) where
 
 import Control.Monad (ap,liftM)
@@ -28,6 +31,7 @@ instance Monad Eff where return = Ret; (>>=) = Bind
 data System
   = FrameEffect (Eff ())
   | DeclareReg1 (Reg Bit -> System)
+  | DeclareReg SizeSpec (Reg [Bit] -> System)
 
 -- the core effect type
 data Eff a where
@@ -38,6 +42,7 @@ data Eff a where
   GetReg :: Reg a -> Eff (E a)
   SetReg :: Show a => Reg a -> E a -> Eff ()
   And :: E Bit -> E Bit -> Eff (E Bit)
+  Plus :: E Nat -> E Nat -> Eff (E Nat)
 
 -- full generated code. includes decs & prog
 data Code = Code
@@ -61,34 +66,43 @@ data Step where
 data Oper a where
   O_Reg :: Reg a -> Oper a
   O_And :: E Bit -> E Bit -> Oper Bit
+  O_Plus :: E Nat -> E Nat -> Oper Nat
 
 -- program expressions; atomic/pure, so can be freely shared
 data E a where
   E_KeyDown :: Key -> E Bit
-  E_Lit :: a -> E a
+  E_Lit :: SizeSpec -> a -> E a
   E_Not :: E Bit -> E Bit
   E_Tmp :: Tmp a -> E a
 
 eNot :: E Bit -> E Bit
 eNot = \case
-  E_Lit B1 -> E_Lit B0
-  E_Lit B0 -> E_Lit B1
+  E_Lit z B1 -> E_Lit z B0
+  E_Lit z B0 -> E_Lit z B1
   E_Not ebar -> ebar
   e -> E_Not e
 
 data Name a where
   N_Reg :: Reg a -> Name a
 
-ePosInt :: Int -> E Nat -- TODO: take required size? (as Nat) -- move to Lib.hs
-ePosInt = E_Lit . bitsOfInt
+ePosInt :: SizeSpec -> Int -> E Nat
+ePosInt size i = do
+  let bits = bitsOfInt size i
+  E_Lit SizeSpec { size = length bits } bits
 
 data Reg a where
+  Reg :: SizeSpec -> RegId -> Reg [Bit]
   Reg1 :: RegId -> Reg Bit
 
 data Tmp a where
+  Tmp :: SizeSpec -> TmpId -> Tmp [Bit]
   Tmp1 :: TmpId -> Tmp Bit
 
-data SizeSpec = SizeSpec { size :: Int }
+data SizeSpec = SizeSpec { size :: Int } -- TODO: rename Size?
+  deriving (Eq,Ord)
+
+size1 :: SizeSpec
+size1 = SizeSpec {size = 1}
 
 data RegId = RegId { u :: Int } deriving (Eq,Ord)
 data TmpId = TmpId { u :: Int } deriving (Eq,Ord)
@@ -105,8 +119,15 @@ instance Show Step where
 deriving instance Show (Oper a)
 deriving instance Show a => Show (E a)
 
-instance Show (Reg a) where show (Reg1 id) = show id
-instance Show (Tmp a) where show (Tmp1 id) = show id
+instance Show (Reg a) where
+  show = \case
+    Reg1 id -> show id
+    Reg size id -> show id ++ show size
+
+instance Show (Tmp a) where
+  show = \case
+    Tmp1 id -> show id
+    Tmp size id -> show id ++ show size
 
 instance Show SizeSpec where show SizeSpec{size} = "#" ++ show size
 instance Show RegId where show RegId{u} = "r"++show u
@@ -115,16 +136,27 @@ instance Show TmpId where show TmpId{u} = "u"++show u
 ----------------------------------------------------------------------
 -- values
 
-data Key = KeyEnter | KeyZ | KeyX deriving (Eq,Ord,Enum,Bounded,Show)
+data Key
+  = KeyEnter
+  | KeyShift
+  | KeyZ
+  | KeyX
+  deriving (Eq,Ord,Enum,Bounded,Show)
+
 newtype Keys = Keys { pressed :: Set Key }
 data XY a = XY { x :: a, y :: a } deriving (Eq,Ord,Functor)
 data RGB a = RGB { r :: a, g :: a, b :: a } deriving (Functor)
 
 type Nat = [Bit]
 
-bitsOfInt :: Int -> [Bit] -- lsb..msb
-bitsOfInt n =
-  if n < 0 then error "bitsOfInt" else loop n
+-- TODO: use Integer when converting to/from [Bit]
+
+bitsOfInt :: SizeSpec -> Int -> [Bit] -- lsb..msb
+bitsOfInt SizeSpec{size} n =
+  if n < 0 then error (show ("bitsOfInt<0",n)) else do
+    let xs = loop n
+    if length xs > size then error (show ("bitsOfInt-too-small",size,xs)) else
+      xs ++ take (size - length xs) (repeat B0)
   where
     loop n = if
       | n == 0 -> []

@@ -79,7 +79,7 @@ interestingOf = \case
 keyMapTable :: Map SDL.Keycode Key
 keyMapTable = Map.fromList ys
   where
-    xs = [ (keyedBy key, key) | key <- [minBound..maxBound] ]
+    xs = [ (by, key) | key <- [minBound..maxBound], by <- keyedBy key ]
     ys = [ (code, expectUnique code keys) | (code,keys) <- groupSort xs ]
     expectUnique code = \case
       [key] -> key
@@ -88,11 +88,12 @@ keyMapTable = Map.fromList ys
         ("bad keyMapTable: " <> show code) : [ "--> " <> show key | key <- keys ]
 
     -- | define the reverse mapping to be sure we are complete
-    keyedBy :: Key -> SDL.Keycode
+    keyedBy :: Key -> [SDL.Keycode]
     keyedBy = \case
-      KeyZ -> SDL.KeycodeZ
-      KeyX -> SDL.KeycodeX
-      KeyEnter -> SDL.KeycodeReturn
+      KeyZ -> [SDL.KeycodeZ]
+      KeyX -> [SDL.KeycodeX]
+      KeyEnter -> [SDL.KeycodeReturn]
+      KeyShift -> [SDL.KeycodeLShift, SDL.KeycodeRShift]
 
 
 data DrawAssets = DrawAssets

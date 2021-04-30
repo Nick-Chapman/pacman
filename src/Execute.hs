@@ -15,7 +15,7 @@ import Types (
 
   -- values
   Keys(..), XY(..),RGB(..), Bit(..),
-  fromBits,
+  fromBits, bitsOfInt,
   )
 
 data Context = Context -- TODO: roms will go here
@@ -68,10 +68,18 @@ runProg rs@RS{screen,state} = \case
 
 evalStep :: RS -> Step -> RS
 evalStep rs@RS{screen,state=s@State{regs},tmps} = \case
-  S_Let (Tmp1 tmpId) oper ->
-    rs { tmps = update tmps tmpId [evalOper rs oper] }
-  S_SetReg (Reg1 regId) e ->
-    rs { state = s { regs = update regs regId [evalE rs e] } }
+  S_Let (Tmp1 id) oper ->
+    rs { tmps = update tmps id [evalOper rs oper] }
+
+  S_Let (Tmp size id) oper -> do
+    rs { tmps = update tmps id (checkSize size (evalOper rs oper)) }
+
+  S_SetReg (Reg1 id) e ->
+    rs { state = s { regs = update regs id [evalE rs e] } }
+
+  S_SetReg (Reg size id) e -> do
+    rs { state = s { regs = update regs id (checkSize size (evalE rs e)) } }
+
   S_SetPixel xy rgb -> do
     rs { screen =
          setScreenPixel
@@ -83,22 +91,31 @@ evalStep rs@RS{screen,state=s@State{regs},tmps} = \case
 evalOper :: RS -> Oper a -> a
 evalOper rs@RS{state=State{regs}} = \case
   O_And e1 e2 -> andBit (evalE rs e1) (evalE rs e2)
-  O_Reg (Reg1 regId) ->
-    case (look regs regId) of
+  O_Plus e1 e2 -> plusBits (evalE rs e1) (evalE rs e2)
+  O_Reg (Reg size id) -> do
+    checkSize size (look regs id)
+  O_Reg (Reg1 id) ->
+    case (look regs id) of
       [b] -> b
-      bits -> error (show ("evalE/Reg1",regId,length bits))
+      bits -> error (show ("evalE/Reg1",id,length bits))
 
 evalE :: RS -> E a -> a
 evalE rs@RS{keys=Keys{pressed},tmps} = \case
   E_KeyDown key -> if Set.member key pressed then B1 else B0
-  E_Lit a -> a
-  E_Tmp (Tmp1 tmpId) ->
-    case (look tmps tmpId) of
-      [b] -> b
-      bits -> error (show ("evalE/Tmp1",tmpId,length bits))
-
+  E_Lit _ a -> a
   E_Not e -> notBit (evalE rs e)
+  E_Tmp (Tmp size id) ->
+    checkSize size (look tmps id)
+  E_Tmp (Tmp1 id) ->
+    case (look tmps id) of
+      [b] -> b
+      bits -> error (show ("evalE/Tmp1",id,length bits))
 
+
+checkSize :: SizeSpec -> [Bit] -> [Bit]
+checkSize SizeSpec{size} xs =
+  if length xs == size then xs else
+    error (show ("checkSize",size,xs))
 
 notBit :: Bit -> Bit
 notBit = \case B1 -> B0; B0 -> B1
@@ -108,15 +125,19 @@ andBit = \case
   B0 -> \_ -> B0
   B1 -> \x -> x
 
+plusBits :: [Bit] -> [Bit] -> [Bit]
+plusBits x y = do
+  let nx = length x
+  let ny = length y
+  let size = max nx ny
+  take size (bitsOfInt (SizeSpec (size+1)) (fromBits x + fromBits y))
+
+
 look :: (Ord k, Show k) => Map k v -> k -> v
 look m k = maybe (error (show ("look/missing",k))) id $ Map.lookup k m
 
 update :: (Ord k, Show k) => Map k v -> k -> v -> Map k v
-update m k v =
-  {-case Map.lookup k m of
-    Nothing -> error (show ("update/missing",k))
-    Just{} -> -}
-      Map.insert k v m
+update m k v = Map.insert k v m
 
 ----------------------------------------------------------------------
 -- Screen (canvas to collect the pixels) -- TODO: is this really needed?

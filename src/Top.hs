@@ -25,5 +25,5 @@ again = do
   putStrLn "*rethinking emulation types*"
   let code = Compile.elab AnExampleSystem.small
   putStr (pretty code)
-  let _ = EmulateWithSdl.main code
+  EmulateWithSdl.main code
   pure ()
