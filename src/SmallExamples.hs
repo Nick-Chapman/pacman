@@ -2,7 +2,7 @@
 module SmallExamples (driveSquare,loadCols) where
 
 import Types (System(..),Eff(..),XY(..),RGB(..),E(..),Nat,Bit(..),Key(..),
-              SizeSpec(..), RomSpec(..), RomId(..),
+              Size(..), RomSpec(..), RomId(..),
               bitsOfInt,
               index,
               eNot)
@@ -50,7 +50,7 @@ driveSquare :: System
 driveSquare = do
   DeclareReg1 $ \enterLastReg -> do
   DeclareReg1 $ \highReg -> do
-  DeclareReg SizeSpec {size = 7} $ \xposReg -> do
+  DeclareReg Size {size = 7} $ \xposReg -> do
   FrameEffect $ do
 
     let goingRight = E_KeyDown KeyX
@@ -144,18 +144,18 @@ andG = And
 --andG x y = switch x y _zero -- explode/test-const prop
 
 nat8 :: Int -> E Nat
-nat8 = ePosInt (SizeSpec 8)
+nat8 = ePosInt (Size 8)
 
 nibble :: Int -> E Nat
-nibble = ePosInt (SizeSpec 4)
+nibble = ePosInt (Size 4)
 
 one :: E [Bit]
-one = ePosInt (SizeSpec 1) 1
+one = ePosInt (Size 1) 1
 
-ePosInt :: SizeSpec -> Int -> E Nat
+ePosInt :: Size -> Int -> E Nat
 ePosInt size i = do
   let bits = bitsOfInt size i
-  E_Lit SizeSpec { size = length bits } bits
+  E_Lit Size { size = length bits } bits
 
 
 lit8 :: Int -> Eff (E Nat)

@@ -6,7 +6,7 @@ import Types (
   -- target
   Code(..),Prog(..),Step(..),E(..),Oper(..),
   RomSpec(..),RomId(..),
-  RegId(..), SizeSpec(..), Reg(..),
+  RegId(..), Size(..), Reg(..),
   TmpId(..), Tmp(..),
   -- runtime
   Bit(..),
@@ -24,7 +24,7 @@ elab = loop ES { regId = 0, regs = [], romId = 101, roms = [] }
         let reg = Reg size regId
         loop es { regId = regId + 1, regs = (regId,size) : regs } (f reg)
       DeclareReg1 f -> do
-        let size = SizeSpec { size = 1 }
+        let size = Size { size = 1 }
         let reg = Reg1 regId
         loop es { regId = regId + 1, regs = (regId,size) : regs } (f reg)
       FrameEffect eff -> do
@@ -33,7 +33,7 @@ elab = loop ES { regId = 0, regs = [], romId = 101, roms = [] }
 
 data ES = ES -- elab state
   { regId :: RegId
-  , regs :: [(RegId,SizeSpec)]
+  , regs :: [(RegId,Size)]
   , romId :: RomId
   , roms :: [(RomId,RomSpec)]
   }
@@ -93,7 +93,7 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
 
       ReadRomByte rid a -> do
         let tmpId = TmpId { u }
-        let size = SizeSpec 8
+        let size = Size 8
         let tmp = Tmp size tmpId
         let oper = O_ReadRomByte rid a
         P_Seq (S_Let tmp oper) $
@@ -105,11 +105,11 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
       Split eff -> do
         comp s eff $ \s e -> do
           shareE s e $ \s tmp -> do
-            let SizeSpec{size} = sizeE e
+            let Size{size} = sizeE e
             k s [E_TmpIndexed tmp i | i <- [0..size-1]]
 
       LitV xs -> do
-        k s (E_Lit (SizeSpec (length xs)) xs)
+        k s (E_Lit (Size (length xs)) xs)
 
       Combine e -> do
         k s (E_Combine e)
@@ -133,13 +133,13 @@ trySimpAnd = \case
   _ ->
     Nothing
 
-sizeE :: E a -> SizeSpec
+sizeE :: E a -> Size
 sizeE = \case
-  E_KeyDown{} -> SizeSpec 1
+  E_KeyDown{} -> Size 1
   E_Lit size _ -> size
   E_LitV size _ -> size
   E_Not e -> sizeE e
   E_Tmp (Tmp size _) -> size
-  E_Tmp (Tmp1 _) -> SizeSpec 1
+  E_Tmp (Tmp1 _) -> Size 1
   E_TmpIndexed _ _ -> size1
   E_Combine es -> sum [ sizeE e | e <- es ]

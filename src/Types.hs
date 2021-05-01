@@ -6,7 +6,7 @@ module Types (
   E(..), Name(..),
 
   RomSpec(..), RomId(..),
-  RegId(..), SizeSpec(..), Reg(..),
+  RegId(..), Size(..), Reg(..),
   TmpId(..),
   Tmp(..),
 
@@ -34,7 +34,7 @@ data System
   = FrameEffect (Eff ())
   | DeclareRom RomSpec (RomId -> System)
   | DeclareReg1 (Reg Bit -> System)
-  | DeclareReg SizeSpec (Reg [Bit] -> System)
+  | DeclareReg Size (Reg [Bit] -> System)
 
 -- the core effect type
 data Eff a where
@@ -58,7 +58,7 @@ index eff i = do
 
 -- full generated code. includes decs & prog
 data Code = Code
-  { regDecs :: [(RegId,SizeSpec)]
+  { regDecs :: [(RegId,Size)]
   , romSpecs :: [(RomId,RomSpec)]
   , entry :: Prog
   }
@@ -90,8 +90,8 @@ data Oper a where
 -- these things must *not* be named
 data E a where
   E_KeyDown :: Key -> E Bit
-  E_Lit :: SizeSpec -> a -> E a
-  E_LitV :: SizeSpec -> [a] -> E [a]
+  E_Lit :: Size -> a -> E a
+  E_LitV :: Size -> [a] -> E [a]
   E_Not :: E Bit -> E Bit
   E_Tmp :: Tmp a -> E a
   E_TmpIndexed :: Tmp [Bit] -> Int -> E Bit -- MSB-first
@@ -111,18 +111,17 @@ data Name a where
   N_Reg :: Reg a -> Name a
 
 data Reg a where
-  Reg :: SizeSpec -> RegId -> Reg [Bit]
+  Reg :: Size -> RegId -> Reg [Bit]
   Reg1 :: RegId -> Reg Bit
 
 data Tmp a where
-  Tmp :: SizeSpec -> TmpId -> Tmp [Bit]
+  Tmp :: Size -> TmpId -> Tmp [Bit]
   Tmp1 :: TmpId -> Tmp Bit -- TODO: remove for less cases?
 
-newtype SizeSpec = SizeSpec { size :: Int } -- TODO: rename Size?
-  deriving (Eq,Ord,Num)
+newtype Size = Size { size :: Int } deriving (Eq,Ord,Num)
 
-size1 :: SizeSpec
-size1 = SizeSpec {size = 1}
+size1 :: Size
+size1 = Size {size = 1}
 
 data RomSpec = RomSpec { path :: String, size :: Int }
 
@@ -154,7 +153,7 @@ instance Show (Tmp a) where
     Tmp1 id -> show id
     Tmp size id -> show id ++ show size
 
-instance Show SizeSpec where show SizeSpec{size} = "#" ++ show size
+instance Show Size where show Size{size} = "#" ++ show size
 instance Show RegId where show RegId{u} = "r"++show u
 instance Show TmpId where show TmpId{u} = "u"++show u
 instance Show RomId where show RomId{u} = "rom"++show u
@@ -177,8 +176,8 @@ type Nat = [Bit]
 
 -- TODO: use Integer when converting to/from [Bit]
 
-bitsOfInt :: SizeSpec -> Int -> [Bit] -- lsb..msb
-bitsOfInt SizeSpec{size} n =
+bitsOfInt :: Size -> Int -> [Bit] -- lsb..msb
+bitsOfInt Size{size} n =
   if n < 0 then error (show ("bitsOfInt<0",n)) else do
     let xs = loop n
     if length xs > size then error (show ("bitsOfInt-too-small",size,xs)) else

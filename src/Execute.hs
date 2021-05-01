@@ -13,7 +13,7 @@ import Rom
 import Types (
   -- code
   Code(..), Prog(..), Step(..), E(..), Oper(..),
-  RegId(..), TmpId(..), RomId(..), RomSpec(..), SizeSpec(..), Reg(..), Tmp(..),
+  RegId(..), TmpId(..), RomId(..), RomSpec(..), Size(..), Reg(..), Tmp(..),
 
   -- values
   Keys(..), XY(..),RGB(..), Bit(..),
@@ -37,7 +37,7 @@ data Picture where
 init :: Code -> IO (Context,State,Prog) -- IO to load roms from file
 init Code{entry=prog,regDecs,romSpecs} = do
   -- TODO: create ram from ram-spec
-  let regs = Map.fromList [ (r,zeroOf size) | (r,SizeSpec {size}) <- regDecs ]
+  let regs = Map.fromList [ (r,zeroOf size) | (r,Size {size}) <- regDecs ]
   roms <-
     Map.fromList <$> sequence
     [ do rom <- Rom.load size path; pure $ (id,rom)
@@ -109,7 +109,7 @@ evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
       bits -> error (show ("evalE/Reg1",id,length bits))
   O_Exp e -> evalE rs e
   O_ReadRomByte romId a ->
-    bitsOfInt (SizeSpec 8) (fromIntegral (Rom.lookup (look roms romId) (fromBits (evalE rs a))))
+    bitsOfInt (Size 8) (fromIntegral (Rom.lookup (look roms romId) (fromBits (evalE rs a))))
 
 evalE :: RS -> E a -> a
 evalE rs@RS{keys=Keys{pressed}} = \case
@@ -130,8 +130,8 @@ evalTmp RS{tmps} = \case
       [b] -> b
       bits -> error (show ("evalE/Tmp1",id,length bits))
 
-checkSize :: SizeSpec -> [Bit] -> [Bit]
-checkSize SizeSpec{size} xs =
+checkSize :: Size -> [Bit] -> [Bit]
+checkSize Size{size} xs =
   if length xs == size then xs else
     error (show ("checkSize",size,xs))
 
@@ -148,7 +148,7 @@ plusBits x y = do
   let nx = length x
   let ny = length y
   let size = max nx ny
-  take size (bitsOfInt (SizeSpec (size+1)) (fromBits x + fromBits y))
+  take size (bitsOfInt (Size (size+1)) (fromBits x + fromBits y))
 
 look :: (Ord k, Show k) => Map k v -> k -> v
 look m k = maybe (error (show ("look/missing",k))) id $ Map.lookup k m
