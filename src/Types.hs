@@ -5,6 +5,7 @@ module Types (
   Code(..),Prog(..),Step(..),Oper(..),
   E(..), Name(..),
 
+  RomSpec(..), RomId(..),
   RegId(..), SizeSpec(..), Reg(..),
   TmpId(..),
   Tmp(..),
@@ -30,6 +31,7 @@ instance Monad Eff where return = Ret; (>>=) = Bind
 -- top level effect; declare regs, load rom etc
 data System
   = FrameEffect (Eff ())
+  | DeclareRom RomSpec (RomId -> System)
   | DeclareReg1 (Reg Bit -> System)
   | DeclareReg SizeSpec (Reg [Bit] -> System)
 
@@ -43,10 +45,16 @@ data Eff a where
   SetReg :: Show a => Reg a -> E a -> Eff ()
   And :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
+  ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
+  Index :: E Nat -> Int -> Eff (E Bit) -- MSB-first
+  Split :: E [Bit] -> Eff [E Bit]
+  Combine :: [E Bit] -> Eff (E [Bit])
+
 
 -- full generated code. includes decs & prog
 data Code = Code
   { regDecs :: [(RegId,SizeSpec)]
+  , romSpecs :: [(RomId,RomSpec)]
   , entry :: Prog
   }
 
@@ -67,13 +75,21 @@ data Oper a where
   O_Reg :: Reg a -> Oper a
   O_And :: E Bit -> E Bit -> Oper Bit
   O_Plus :: E Nat -> E Nat -> Oper Nat
+  O_ReadRomByte :: RomId -> E Nat -> Oper Nat
+  O_Exp :: E [Bit] -> Oper [Bit]
 
 -- program expressions; atomic/pure, so can be freely shared
+-- knows it's size
 data E a where
   E_KeyDown :: Key -> E Bit
   E_Lit :: SizeSpec -> a -> E a
   E_Not :: E Bit -> E Bit
   E_Tmp :: Tmp a -> E a
+  E_TmpIndexed :: Tmp [Bit] -> Int -> E Bit -- MSB-first
+  E_Combine :: [E Bit] -> E [Bit]
+  --E_Combine :: [E a] -> E [a] -- TODO: can we have this?
+
+-- TODO: break E into two levels E/A, with no recursion in E for Concat etc
 
 eNot :: E Bit -> E Bit
 eNot = \case
@@ -96,16 +112,21 @@ data Reg a where
 
 data Tmp a where
   Tmp :: SizeSpec -> TmpId -> Tmp [Bit]
-  Tmp1 :: TmpId -> Tmp Bit
+  Tmp1 :: TmpId -> Tmp Bit -- TODO: remove for less cases?
 
-data SizeSpec = SizeSpec { size :: Int } -- TODO: rename Size?
-  deriving (Eq,Ord)
+newtype SizeSpec = SizeSpec { size :: Int } -- TODO: rename Size?
+  deriving (Eq,Ord,Num)
 
 size1 :: SizeSpec
 size1 = SizeSpec {size = 1}
 
-data RegId = RegId { u :: Int } deriving (Eq,Ord)
-data TmpId = TmpId { u :: Int } deriving (Eq,Ord)
+data RomSpec = RomSpec { path :: String, size :: Int }
+
+
+newtype RegId = RegId { u :: Int } deriving (Eq,Ord,Num)
+newtype TmpId = TmpId { u :: Int } deriving (Eq,Ord)
+newtype RomId = RomId { u :: Int } deriving (Eq,Ord,Num)
+
 
 ----------------------------------------------------------------------
 -- show
@@ -132,6 +153,7 @@ instance Show (Tmp a) where
 instance Show SizeSpec where show SizeSpec{size} = "#" ++ show size
 instance Show RegId where show RegId{u} = "r"++show u
 instance Show TmpId where show TmpId{u} = "u"++show u
+instance Show RomId where show RomId{u} = "rom"++show u
 
 ----------------------------------------------------------------------
 -- values

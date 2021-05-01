@@ -33,7 +33,7 @@ main code = do
   let
     loop :: World -> IO ()
     loop World{state,keys,frame} = do
-      --putStrLn $ "frame: " ++ show (frame,keys)
+      --putStrLn $ "frame: " ++ show frame
       (picture,state) <- Execute.runForOneFrame prog context state keys
       drawEverything assets picture
       events <- SDL.pollEvents

@@ -8,17 +8,21 @@ import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
+import Rom
+
 import Types (
   -- code
   Code(..), Prog(..), Step(..), E(..), Oper(..),
-  RegId(..), TmpId(..), SizeSpec(..), Reg(..), Tmp(..),
+  RegId(..), TmpId(..), RomId(..), RomSpec(..), SizeSpec(..), Reg(..), Tmp(..),
 
   -- values
   Keys(..), XY(..),RGB(..), Bit(..),
   fromBits, bitsOfInt,
   )
 
-data Context = Context -- TODO: roms will go here
+data Context = Context
+  { roms :: Map RomId Rom
+  }
 
 -- everything which can form a saved-state
 data State = State
@@ -31,10 +35,15 @@ data Picture where
   Pictures :: [Picture] -> Picture
 
 init :: Code -> IO (Context,State,Prog) -- IO to load roms from file
-init Code{entry=prog,regDecs} = do
-  -- TODO: load roms, create ram,
+init Code{entry=prog,regDecs,romSpecs} = do
+  -- TODO: create ram from ram-spec
   let regs = Map.fromList [ (r,zeroOf size) | (r,SizeSpec {size}) <- regDecs ]
-  pure $ (Context,State {regs},prog)
+  roms <-
+    Map.fromList <$> sequence
+    [ do rom <- Rom.load size path; pure $ (id,rom)
+    | (id,RomSpec {path,size}) <- romSpecs
+    ]
+  pure $ (Context {roms},State {regs},prog)
 
 zeroOf :: Int -> [Bit]
 zeroOf size = take size (repeat B0)
@@ -89,7 +98,7 @@ evalStep rs@RS{screen,state=s@State{regs},tmps} = \case
        }
 
 evalOper :: RS -> Oper a -> a
-evalOper rs@RS{state=State{regs}} = \case
+evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
   O_And e1 e2 -> andBit (evalE rs e1) (evalE rs e2)
   O_Plus e1 e2 -> plusBits (evalE rs e1) (evalE rs e2)
   O_Reg (Reg size id) -> do
@@ -98,19 +107,33 @@ evalOper rs@RS{state=State{regs}} = \case
     case (look regs id) of
       [b] -> b
       bits -> error (show ("evalE/Reg1",id,length bits))
+  O_Exp e -> evalE rs e
+  O_ReadRomByte romId a ->
+    bitsOfInt (SizeSpec 8) (fromIntegral (Rom.lookup (look roms romId) (fromBits (evalE rs a))))
 
 evalE :: RS -> E a -> a
-evalE rs@RS{keys=Keys{pressed},tmps} = \case
+evalE rs@RS{keys=Keys{pressed}} = \case
   E_KeyDown key -> if Set.member key pressed then B1 else B0
   E_Lit _ a -> a
   E_Not e -> notBit (evalE rs e)
-  E_Tmp (Tmp size id) ->
+  E_Tmp tmp -> evalTmp rs tmp
+  E_TmpIndexed e i -> indexBits (evalTmp rs e) i
+  E_Combine es -> [evalE rs e | e <- es]
+
+evalTmp :: RS -> Tmp a -> a
+evalTmp RS{tmps} = \case
+  Tmp size id ->
     checkSize size (look tmps id)
-  E_Tmp (Tmp1 id) ->
+  Tmp1 id ->
     case (look tmps id) of
       [b] -> b
       bits -> error (show ("evalE/Tmp1",id,length bits))
 
+indexBits :: [Bit] -> Int -> Bit
+indexBits xs i =
+  if i < 0 then error "indexBits:i<0" else
+    if i >= length xs then error (show ("indexBits:too-large",i,xs)) else
+      xs !! i
 
 checkSize :: SizeSpec -> [Bit] -> [Bit]
 checkSize SizeSpec{size} xs =
@@ -131,7 +154,6 @@ plusBits x y = do
   let ny = length y
   let size = max nx ny
   take size (bitsOfInt (SizeSpec (size+1)) (fromBits x + fromBits y))
-
 
 look :: (Ord k, Show k) => Map k v -> k -> v
 look m k = maybe (error (show ("look/missing",k))) id $ Map.lookup k m

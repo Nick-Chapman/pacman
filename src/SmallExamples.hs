@@ -2,11 +2,47 @@
 module SmallExamples (driveSquare,loadCols) where
 
 import Types (System(..),Eff(..),XY(..),RGB(..),E(..),Nat,Bit(..),Key(..),
-              SizeSpec(..),
+              SizeSpec(..), RomSpec(..), RomId(..),
               ePosInt,eNot)
 
 loadCols :: System
-loadCols = undefined
+loadCols = do
+  DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
+  FrameEffect $ do
+    sequence_ [colSquare colRom i | i <- [0..15]]
+
+colSquare :: RomId -> Int -> Eff ()
+colSquare colRom i = do
+  let nib = nibble i
+  byte <- ReadRomByte colRom nib
+  col <- decodeAsRGB byte
+  let xy = XY { x = nat8 (14 * i), y = nat8 0 }
+  setSquare 3 xy col
+
+decodeAsRGB :: E Nat -> Eff (RGB (E Nat))
+decodeAsRGB w = do
+  let
+    bit :: Int -> Int -> Eff (E Nat)
+    bit i v = do
+      c <- w `Index` i
+      muxBits c (nat8 v) (nat8 0)
+  r <- do
+    x <- bit 0 0x21
+    y <- bit 1 0x47
+    z <- bit 2 0x97
+    add3 x y z
+  g <- do
+    x <- bit 3 0x21
+    y <- bit 4 0x47
+    z <- bit 5 0x97
+    add3 x y z
+  b <- do
+    x <- bit 6 0x51
+    y <- bit 7 0xAE
+    let z = nat8 0
+    add3 x y z
+  pure RGB { r, g, b }
+  where add3 a b c = do ab <- Plus a b; Plus ab c
 
 driveSquare :: System
 driveSquare = do
@@ -15,7 +51,6 @@ driveSquare = do
   DeclareReg SizeSpec {size = 7} $ \xposReg -> do
   FrameEffect $ do
 
-    --let z = E_KeyDown KeyZ -- move left
     let goingRight = E_KeyDown KeyX
     let shift = E_KeyDown KeyShift -- colour
     let enter = E_KeyDown KeyEnter -- switch high/low line
@@ -46,12 +81,10 @@ driveSquare = do
 
     setSquare 5 loc col
 
-
 setSquare :: Int -> XY (E Nat) -> RGB (E Nat) -> Eff ()
 setSquare width loc col = do
   let dels = [ XY{x,y} | x <- map nat8 [0..width-1], y <- map nat8 [0..width-1] ]
   sequence_ [do xy <- addXY loc offset; SetPixel xy col | offset <- dels]
-
 
 addXY :: XY (E Nat) -> XY (E Nat) -> Eff (XY (E Nat))
 addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
@@ -59,6 +92,20 @@ addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
   y <- Plus y1 y2
   pure $ XY {x,y}
 
+-- TODO: move all this stuff out to a Lib.hs
+
+muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
+muxBits sel yes no = do
+  ys <- Split yes
+  ns <- Split no
+  sequence [ mux sel y n | (y,n) <- zipChecked ys ns ] >>= Combine
+
+zipChecked :: [a] -> [b] -> [(a,b)]
+zipChecked xs ys = do
+  let xn = length xs
+  let yn = length ys
+  if xn /= yn then error (show ("zipChecked",xn,yn)) else
+    zip xs ys
 
 -- | generic on switched type; cause code explosion
 switch :: E Bit -> a -> a -> Eff a
@@ -97,9 +144,8 @@ andG = And
 nat8 :: Int -> E Nat
 nat8 = ePosInt (SizeSpec 8)
 
-_zero :: E Bit
-_zero = E_Lit (SizeSpec 1) B0
+nibble :: Int -> E Nat
+nibble = ePosInt (SizeSpec 4)
 
 one :: E [Bit]
---one = E_Lit (SizeSpec 1) B1
 one = ePosInt (SizeSpec 1) 1

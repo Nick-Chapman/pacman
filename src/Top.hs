@@ -24,8 +24,8 @@ again :: IO ()
 again = do
   putStrLn "*rethinking emulation types*"
   let example =
-        SmallExamples.driveSquare
-        --SmallExamples.loadCols
+        --SmallExamples.driveSquare
+        SmallExamples.loadCols
   let code = Compile.elab example
   putStr (pretty code)
   EmulateWithSdl.main code
