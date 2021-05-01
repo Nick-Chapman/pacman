@@ -1,6 +1,7 @@
 
 module Top (main) where
 
+import Control.Monad (when)
 import Pretty (pretty)
 import System.Environment (getArgs)
 import qualified SmallExamples
@@ -11,22 +12,23 @@ main :: IO ()
 main = do
   args <- getArgs
   case parseArgs args of
-    Again -> again
+    Again pic -> again pic
 
-data Mode = Again
+data Mode = Again Bool
 
 parseArgs :: [String] -> Mode
 parseArgs = \case
-  [] -> Again
+  [] -> Again False
+  ["pic"] -> Again True
   xs -> error (show ("parseArgs",xs))
 
-again :: IO ()
-again = do
+again :: Bool -> IO ()
+again pic = do
   putStrLn "*rethinking emulation types*"
   let example =
         --SmallExamples.driveSquare
         SmallExamples.loadCols
   let code = Compile.elab example
   putStr (pretty code)
-  EmulateWithSdl.main code
+  when pic $ EmulateWithSdl.main code
   pure ()

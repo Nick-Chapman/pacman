@@ -3,7 +3,9 @@ module SmallExamples (driveSquare,loadCols) where
 
 import Types (System(..),Eff(..),XY(..),RGB(..),E(..),Nat,Bit(..),Key(..),
               SizeSpec(..), RomSpec(..), RomId(..),
-              ePosInt,eNot)
+              bitsOfInt,
+              index,
+              eNot)
 
 loadCols :: System
 loadCols = do
@@ -24,8 +26,8 @@ decodeAsRGB w = do
   let
     bit :: Int -> Int -> Eff (E Nat)
     bit i v = do
-      c <- w `Index` i
-      muxBits c (nat8 v) (nat8 0)
+      c <- pure w `index` i
+      muxBits c (lit8 v) (lit8 0)
   r <- do
     x <- bit 0 0x21
     y <- bit 1 0x47
@@ -94,7 +96,7 @@ addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
 
 -- TODO: move all this stuff out to a Lib.hs
 
-muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
+muxBits :: E Bit -> Eff (E [Bit]) -> Eff (E [Bit]) -> Eff (E [Bit])
 muxBits sel yes no = do
   ys <- Split yes
   ns <- Split no
@@ -149,3 +151,15 @@ nibble = ePosInt (SizeSpec 4)
 
 one :: E [Bit]
 one = ePosInt (SizeSpec 1) 1
+
+ePosInt :: SizeSpec -> Int -> E Nat
+ePosInt size i = do
+  let bits = bitsOfInt size i
+  E_Lit SizeSpec { size = length bits } bits
+
+
+lit8 :: Int -> Eff (E Nat)
+lit8 i = do
+  let size = 8
+  let bits = bitsOfInt size i
+  LitV bits

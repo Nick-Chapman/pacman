@@ -14,10 +14,11 @@ module Types (
   Nat, Bit(..), Key(..), Keys(..),
 
   eNot,
-  ePosInt,
   fromBits,
   bitsOfInt,
   size1,
+  indexBits,
+  index,
 
   ) where
 
@@ -46,10 +47,14 @@ data Eff a where
   And :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
-  Index :: E Nat -> Int -> Eff (E Bit) -- MSB-first
-  Split :: E [Bit] -> Eff [E Bit]
+  LitV :: [Bit] -> Eff (E [Bit]) -- TODO: need to know [a] ?
+  Split :: Eff (E [Bit]) -> Eff [E Bit]
   Combine :: [E Bit] -> Eff (E [Bit])
 
+index :: Eff (E [Bit]) -> Int -> Eff (E Bit)
+index eff i = do
+  bits <- Split eff
+  pure $ indexBits bits i
 
 -- full generated code. includes decs & prog
 data Code = Code
@@ -71,18 +76,22 @@ data Step where
   S_SetPixel :: XY (E Nat) -> RGB (E Nat) -> Step
 
 -- operation (non atomic/pure expression), will always be let-bound
+-- these things MUST be name
 data Oper a where
   O_Reg :: Reg a -> Oper a
   O_And :: E Bit -> E Bit -> Oper Bit
   O_Plus :: E Nat -> E Nat -> Oper Nat
   O_ReadRomByte :: RomId -> E Nat -> Oper Nat
-  O_Exp :: E [Bit] -> Oper [Bit]
+  O_Exp :: E [Bit] -> Oper [Bit] -- TODO: this is the problem!
+  --O_Exp :: Show a => E a -> Oper a -- can we be more general?
 
 -- program expressions; atomic/pure, so can be freely shared
 -- knows it's size
+-- these things must *not* be named
 data E a where
   E_KeyDown :: Key -> E Bit
   E_Lit :: SizeSpec -> a -> E a
+  E_LitV :: SizeSpec -> [a] -> E [a]
   E_Not :: E Bit -> E Bit
   E_Tmp :: Tmp a -> E a
   E_TmpIndexed :: Tmp [Bit] -> Int -> E Bit -- MSB-first
@@ -100,11 +109,6 @@ eNot = \case
 
 data Name a where
   N_Reg :: Reg a -> Name a
-
-ePosInt :: SizeSpec -> Int -> E Nat
-ePosInt size i = do
-  let bits = bitsOfInt size i
-  E_Lit SizeSpec { size = length bits } bits
 
 data Reg a where
   Reg :: SizeSpec -> RegId -> Reg [Bit]
@@ -192,6 +196,12 @@ fromBits = \case
   B1:xs -> 2 * fromBits xs + 1
 
 data Bit = B0 | B1
+
+indexBits :: Show a => [a] -> Int -> a
+indexBits xs i =
+  if i < 0 then error "indexBits:i<0" else
+    if i >= length xs then error (show ("indexBits:too-large",i,xs)) else
+      xs !! i
 
 
 instance Show Bit where show = \case B0 -> "0"; B1 -> "1"

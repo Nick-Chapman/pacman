@@ -17,7 +17,7 @@ import Types (
 
   -- values
   Keys(..), XY(..),RGB(..), Bit(..),
-  fromBits, bitsOfInt,
+  fromBits, bitsOfInt, indexBits,
   )
 
 data Context = Context
@@ -115,6 +115,7 @@ evalE :: RS -> E a -> a
 evalE rs@RS{keys=Keys{pressed}} = \case
   E_KeyDown key -> if Set.member key pressed then B1 else B0
   E_Lit _ a -> a
+  E_LitV _ a -> a
   E_Not e -> notBit (evalE rs e)
   E_Tmp tmp -> evalTmp rs tmp
   E_TmpIndexed e i -> indexBits (evalTmp rs e) i
@@ -128,12 +129,6 @@ evalTmp RS{tmps} = \case
     case (look tmps id) of
       [b] -> b
       bits -> error (show ("evalE/Tmp1",id,length bits))
-
-indexBits :: [Bit] -> Int -> Bit
-indexBits xs i =
-  if i < 0 then error "indexBits:i<0" else
-    if i >= length xs then error (show ("indexBits:too-large",i,xs)) else
-      xs !! i
 
 checkSize :: SizeSpec -> [Bit] -> [Bit]
 checkSize SizeSpec{size} xs =
