@@ -1,5 +1,5 @@
 
-module SmallExamples (driveSquare,loadCols) where
+module SmallExamples (combined) where
 
 import Types (System(..),Eff(..),XY(..),RGB(..),E(..),Nat,Bit(..),Key(..),
               Size(..), RomSpec(..), RomId(..),
@@ -7,19 +7,13 @@ import Types (System(..),Eff(..),XY(..),RGB(..),E(..),Nat,Bit(..),Key(..),
               index,
               eNot)
 
-loadCols :: System
-loadCols = do
-  DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
-  FrameEffect $ do
-    sequence_ [colSquare colRom i | i <- [0..15]]
-
 colSquare :: RomId -> Int -> Eff ()
 colSquare colRom i = do
   let nib = nibble i
   byte <- ReadRomByte colRom nib
   col <- decodeAsRGB byte
   let xy = XY { x = nat8 (14 * i), y = nat8 0 }
-  setSquare 3 xy col
+  setSquare 5 xy col
 
 decodeAsRGB :: E Nat -> Eff (RGB (E Nat))
 decodeAsRGB w = do
@@ -46,12 +40,16 @@ decodeAsRGB w = do
   pure RGB { r, g, b }
   where add3 a b c = do ab <- Plus a b; Plus ab c
 
-driveSquare :: System
-driveSquare = do
+
+combined :: System
+combined = do
   DeclareReg1 $ \enterLastReg -> do
   DeclareReg1 $ \highReg -> do
   DeclareReg Size {size = 7} $ \xposReg -> do
+  DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
   FrameEffect $ do
+
+    sequence_ [colSquare colRom i | i <- [0..15]]
 
     let goingRight = E_KeyDown KeyX
     let shift = E_KeyDown KeyShift -- colour

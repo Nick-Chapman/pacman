@@ -25,9 +25,7 @@ parseArgs = \case
 again :: Bool -> IO ()
 again pic = do
   putStrLn "*rethinking emulation types*"
-  let example =
-        --SmallExamples.driveSquare
-        SmallExamples.loadCols
+  let example = SmallExamples.combined
   let code = Compile.elab example
   putStr (pretty code)
   when pic $ EmulateWithSdl.main code
