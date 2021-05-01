@@ -84,7 +84,7 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
           _ -> P_If bit (k s B1) (k s B0)
 
       GetReg reg@(Reg size _) -> do
-        shareO s size (O_Reg reg) $ \s tmp ->
+        shareV s size (O_Reg reg) $ \s tmp ->
           k s (E_Tmp tmp)
 
       GetReg reg@Reg1{} -> do
@@ -94,7 +94,7 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
       Plus e1 e2 -> do
         let size = max (sizeE e1) (sizeE e2)
         let oper = O_Plus e1 e2
-        shareO s size oper $ \s tmp ->
+        shareV s size oper $ \s tmp ->
           k s (E_Tmp tmp)
 
       And e1 e2 -> do
@@ -106,7 +106,7 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
               k s (E_Tmp tmp)
 
       ReadRomByte rid a -> do
-        shareO s (Size 8) (O_ReadRomByte rid a) $ \s tmp -> do
+        shareV s (Size 8) (O_ReadRomByte rid a) $ \s tmp -> do
           k s (E_Tmp tmp)
 
       Split eff -> do
@@ -130,8 +130,8 @@ share1 s@CS{u} oper k = do
   let tmp = Tmp1 tmpId
   P_Seq (S_Let tmp oper) (k s { u = u + 1 } tmp)
 
-shareO :: CS -> Size -> Oper [Bit] -> (CS -> Tmp [Bit] -> Prog) -> Prog
-shareO s@CS{u} size oper k = do
+shareV :: CS -> Size -> Oper [Bit] -> (CS -> Tmp [Bit] -> Prog) -> Prog
+shareV s@CS{u} size oper k = do
   let tmpId = TmpId { u }
   let tmp = Tmp size tmpId
   P_Seq (S_Let tmp oper) (k s { u = u + 1 } tmp)

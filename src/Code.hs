@@ -68,7 +68,7 @@ data Reg a where
 
 data Tmp a where
   Tmp :: Size -> TmpId -> Tmp [Bit]
-  Tmp1 :: TmpId -> Tmp Bit -- TODO: remove for less cases?
+  Tmp1 :: TmpId -> Tmp Bit
 
 data RomSpec = RomSpec { path :: String, size :: Int }
 
@@ -131,19 +131,11 @@ runProg rs@RS{screen,state} = \case
       B0 -> runProg rs that
 
 evalStep :: RS -> Step -> RS
-evalStep rs@RS{screen,state=s@State{regs},tmps} = \case
-  S_Let (Tmp1 id) oper ->
-    rs { tmps = update tmps id [evalOper rs oper] }
-
-  S_Let (Tmp size id) oper -> do
-    rs { tmps = update tmps id (checkSize size (evalOper rs oper)) }
-
-  S_SetReg (Reg1 id) e ->
-    rs { state = s { regs = update regs id [evalE rs e] } }
-
-  S_SetReg (Reg size id) e -> do
-    rs { state = s { regs = update regs id (checkSize size (evalE rs e)) } }
-
+evalStep rs@RS{screen,state,tmps} = \case
+  S_Let tmp oper -> do
+    rs { tmps = bindTmp tmps (evalOper rs oper) tmp }
+  S_SetReg reg e ->
+    rs { state = updateReg state (evalE rs e) reg }
   S_SetPixel xy rgb -> do
     rs { screen =
          setScreenPixel
@@ -151,6 +143,20 @@ evalStep rs@RS{screen,state=s@State{regs},tmps} = \case
          (fmap (fromBits . evalE rs) xy)
          (fmap (fromBits . evalE rs) rgb)
        }
+
+bindTmp :: Tmps -> a -> Tmp a -> Tmps
+bindTmp tmps val = \case
+  Tmp1 id ->
+    update tmps id [val]
+  Tmp size id -> do
+    update tmps id (checkSize size val)
+
+updateReg :: State -> a -> Reg a -> State
+updateReg s@State{regs} val = \case
+  Reg1 id ->
+    s { regs = update regs id [val] }
+  Reg size id -> do
+    s { regs = update regs id (checkSize size val) }
 
 evalOper :: RS -> Oper a -> a
 evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
@@ -162,7 +168,6 @@ evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
     case (look regs id) of
       [b] -> b
       bits -> error (show ("evalE/Reg1",id,length bits))
-  --O_Exp e -> evalE rs e
   O_ReadRomByte romId a ->
     bitsOfInt (Size 8) (fromIntegral (Rom.lookup (look roms romId) (fromBits (evalE rs a))))
 
