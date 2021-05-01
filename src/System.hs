@@ -109,14 +109,14 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
         shareO s (Size 8) (O_ReadRomByte rid a) $ \s tmp -> do
           k s (E_Tmp tmp)
 
-      Split (LitV xs) -> do
-        k s (map (E_Lit 1) xs)
-
       Split eff -> do
         comp s eff $ \s e -> do
-          let size@(Size n) = sizeE e
-          shareO s size (O_Exp e) $ \s tmp -> do
-            k s [E_TmpIndexed tmp i | i <- [0..n-1]]
+          case e of
+            E_Lit _ xs -> k s (map (E_Lit 1) xs)
+            _ -> do
+              let size@(Size n) = sizeE e
+              shareO s size (O_Exp e) $ \s tmp -> do
+                k s [E_TmpIndexed tmp i | i <- [0..n-1]]
 
       LitV xs -> do
         k s (E_Lit (Size (length xs)) xs)
