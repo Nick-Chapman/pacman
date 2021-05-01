@@ -41,7 +41,6 @@ data Oper a where
   O_And :: E Bit -> E Bit -> Oper Bit
   O_Plus :: E Nat -> E Nat -> Oper Nat
   O_ReadRomByte :: RomId -> E Nat -> Oper Nat
-  O_Exp :: Show a => E a -> Oper a -- TODO: Why is this really needed?
 
 -- program expressions; atomic/pure, so can be freely shared
 -- knows it's size
@@ -52,7 +51,7 @@ data E a where
   E_Not :: E Bit -> E Bit
   E_Tmp :: Tmp a -> E a
   E_TmpIndexed :: Tmp [Bit] -> Int -> E Bit
-  E_Combine :: Show a => [E a] -> E [a]
+  E_Combine :: [E Bit] -> E [Bit]
 
 -- TODO: break E into two levels E/A, with no recursion in E for Concat etc
 
@@ -163,7 +162,7 @@ evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
     case (look regs id) of
       [b] -> b
       bits -> error (show ("evalE/Reg1",id,length bits))
-  O_Exp e -> evalE rs e
+  --O_Exp e -> evalE rs e
   O_ReadRomByte romId a ->
     bitsOfInt (Size 8) (fromIntegral (Rom.lookup (look roms romId) (fromBits (evalE rs a))))
 

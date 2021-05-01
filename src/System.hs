@@ -113,10 +113,10 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
         comp s eff $ \s e -> do
           case e of
             E_Lit _ xs -> k s (map (E_Lit 1) xs)
-            _ -> do
-              let size@(Size n) = sizeE e
-              shareO s size (O_Exp e) $ \s tmp -> do
-                k s [E_TmpIndexed tmp i | i <- [0..n-1]]
+            E_Combine xs -> k s xs
+            E_Tmp tmp -> do
+              let Size n = sizeE e
+              k s [E_TmpIndexed tmp i | i <- [0..n-1]]
 
       LitV xs -> do
         k s (E_Lit (Size (length xs)) xs)
@@ -126,23 +126,15 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
 
 share1 :: CS -> Oper Bit -> (CS -> Tmp Bit -> Prog) -> Prog
 share1 s@CS{u} oper k = do
-  case oper of
-    --O_Exp (E_Tmp tmp) -> k s tmp
-    _ -> do
-      let tmpId = TmpId { u }
-      let tmp = Tmp1 tmpId
-      P_Seq (S_Let tmp oper) $
-        k s { u = u + 1 } tmp
+  let tmpId = TmpId { u }
+  let tmp = Tmp1 tmpId
+  P_Seq (S_Let tmp oper) (k s { u = u + 1 } tmp)
 
 shareO :: CS -> Size -> Oper [Bit] -> (CS -> Tmp [Bit] -> Prog) -> Prog
 shareO s@CS{u} size oper k = do
-  case oper of
-    O_Exp (E_Tmp tmp) -> k s tmp
-    _ -> do
-      let tmpId = TmpId { u }
-      let tmp = Tmp size tmpId
-      P_Seq (S_Let tmp oper) $
-        k s { u = u + 1 } tmp
+  let tmpId = TmpId { u }
+  let tmp = Tmp size tmpId
+  P_Seq (S_Let tmp oper) (k s { u = u + 1 } tmp)
 
 trySimpAnd :: (E Bit, E Bit) -> Maybe (E Bit)
 trySimpAnd = \case
@@ -161,4 +153,4 @@ sizeE = \case
   E_Tmp (Tmp size _) -> size
   E_Tmp (Tmp1 _) -> Size 1
   E_TmpIndexed _ _ -> Size 1
-  E_Combine es -> sum [ sizeE e | e <- es ]
+  E_Combine xs -> Size (length xs)
