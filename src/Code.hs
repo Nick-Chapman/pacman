@@ -41,8 +41,7 @@ data Oper a where
   O_And :: E Bit -> E Bit -> Oper Bit
   O_Plus :: E Nat -> E Nat -> Oper Nat
   O_ReadRomByte :: RomId -> E Nat -> Oper Nat
-  --O_Exp :: Show a => E a -> Oper a -- more general?
-  O_Exp :: E [Bit] -> Oper [Bit] -- TODO: Why is this really needed?
+  O_Exp :: Show a => E a -> Oper a -- TODO: Why is this really needed?
 
 -- program expressions; atomic/pure, so can be freely shared
 -- knows it's size
@@ -50,12 +49,10 @@ data Oper a where
 data E a where
   E_KeyDown :: Key -> E Bit
   E_Lit :: Size -> a -> E a
-  E_LitV :: Size -> [a] -> E [a]
   E_Not :: E Bit -> E Bit
   E_Tmp :: Tmp a -> E a
-  E_TmpIndexed :: Tmp [Bit] -> Int -> E Bit -- MSB-first
-  E_Combine :: [E Bit] -> E [Bit]
-  --E_Combine :: [E a] -> E [a] -- TODO: can we have this?
+  E_TmpIndexed :: Tmp [Bit] -> Int -> E Bit
+  E_Combine :: Show a => [E a] -> E [a]
 
 -- TODO: break E into two levels E/A, with no recursion in E for Concat etc
 
@@ -174,7 +171,6 @@ evalE :: RS -> E a -> a
 evalE rs@RS{keys=Keys{pressed}} = \case
   E_KeyDown key -> if Set.member key pressed then B1 else B0
   E_Lit _ a -> a
-  E_LitV _ a -> a
   E_Not e -> notBit (evalE rs e)
   E_Tmp tmp -> evalTmp rs tmp
   E_TmpIndexed e i -> indexBits (evalTmp rs e) i
@@ -196,7 +192,7 @@ update :: (Ord k, Show k) => Map k v -> k -> v -> Map k v
 update m k v = Map.insert k v m
 
 ----------------------------------------------------------------------
--- Screen (canvas to collect the pixels) -- TODO: is this really needed?
+-- Screen (canvas to collect the pixels)
 
 data Screen = Screen { m :: Map (XY Int) (RGB Int)}
 

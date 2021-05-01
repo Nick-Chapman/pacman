@@ -88,8 +88,6 @@ addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
   y <- Plus y1 y2
   pure $ XY {x,y}
 
--- TODO: move all this stuff out to a Lib.hs
-
 muxBits :: E Bit -> Eff (E [Bit]) -> Eff (E [Bit]) -> Eff (E [Bit])
 muxBits sel yes no = do
   ys <- Split yes

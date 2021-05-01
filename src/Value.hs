@@ -27,8 +27,6 @@ checkSize Size{size} xs =
   if length xs == size then xs else
     error (show ("checkSize",size,xs))
 
--- TODO: use Integer when converting to/from [Bit]
-
 bitsOfInt :: Size -> Int -> [Bit] -- lsb..msb
 bitsOfInt Size{size} n =
   if n < 0 then error (show ("bitsOfInt<0",n)) else do

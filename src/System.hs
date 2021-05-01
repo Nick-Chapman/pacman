@@ -22,14 +22,14 @@ data System
 data Eff a where
   Ret :: a -> Eff a
   Bind :: Eff a -> (a -> Eff b) -> Eff b
-  CaseBit :: E Bit -> Eff Bit -- TODO: generalize any bounded type
+  CaseBit :: E Bit -> Eff Bit
   SetPixel :: XY (E Nat) -> RGB (E Nat) -> Eff ()
   GetReg :: Reg a -> Eff (E a)
   SetReg :: Show a => Reg a -> E a -> Eff ()
   And :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
-  LitV :: [Bit] -> Eff (E [Bit]) -- TODO: need to know [a] ?
+  LitV :: [a] -> Eff (E [a])
   Split :: Eff (E [Bit]) -> Eff [E Bit]
   Combine :: [E Bit] -> Eff (E [Bit])
 
@@ -157,7 +157,6 @@ sizeE :: E a -> Size
 sizeE = \case
   E_KeyDown{} -> Size 1
   E_Lit size _ -> size
-  E_LitV size _ -> size
   E_Not e -> sizeE e
   E_Tmp (Tmp size _) -> size
   E_Tmp (Tmp1 _) -> Size 1
