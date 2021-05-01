@@ -44,7 +44,7 @@ compile0 :: Eff () -> Prog
 compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
   where
     comp :: CS -> Eff a -> (CS -> a -> Prog) -> Prog
-    comp s@CS{u} eff k = case eff of
+    comp s eff k = case eff of
       Ret a -> k s a
       Bind e f -> comp s e $ \s a -> comp s (f a) k
 
@@ -57,56 +57,40 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
           E_Lit _ B0 -> k s B0
           _ -> P_If bit (k s B1) (k s B0)
 
-      -- TODO: factor duplicate code introduces tmps for various opers
-
       GetReg reg@(Reg size _) -> do
-        let id = TmpId { u }
-        let tmp = Tmp size id
-        let oper = O_Reg reg
-        P_Seq (S_Let tmp oper) $
-          k s { u = u + 1 } $ E_Tmp tmp
+        shareO s size (O_Reg reg) $ \s tmp ->
+          k s (E_Tmp tmp)
 
       GetReg reg@Reg1{} -> do
-        let tmpId = TmpId { u }
-        let tmp = Tmp1 tmpId
-        let oper = O_Reg reg
-        P_Seq (S_Let tmp oper) $
-          k s { u = u + 1 } $ E_Tmp tmp
+        share1 s (O_Reg reg) $ \s tmp ->
+          k s (E_Tmp tmp)
 
       Plus e1 e2 -> do
-        let tmpId = TmpId { u }
         let size = max (sizeE e1) (sizeE e2)
-        let tmp = Tmp size tmpId
         let oper = O_Plus e1 e2
-        P_Seq (S_Let tmp oper) $
-          k s { u = u + 1} $ E_Tmp tmp
+        shareO s size oper $ \s tmp ->
+          k s (E_Tmp tmp)
 
       And e1 e2 -> do
         case (trySimpAnd (e1,e2)) of
           Just e -> k s e
           Nothing -> do
-            let tmpId = TmpId { u }
-            let tmp = Tmp1 tmpId
             let oper = O_And e1 e2
-            P_Seq (S_Let tmp oper) $
-              k s { u = u + 1} $ E_Tmp tmp
+            share1 s oper $ \s tmp ->
+              k s (E_Tmp tmp)
 
       ReadRomByte rid a -> do
-        let tmpId = TmpId { u }
-        let size = Size 8
-        let tmp = Tmp size tmpId
-        let oper = O_ReadRomByte rid a
-        P_Seq (S_Let tmp oper) $
-          k s { u = u + 1 } $ E_Tmp tmp
+        shareO s (Size 8) (O_ReadRomByte rid a) $ \s tmp -> do
+          k s (E_Tmp tmp)
 
       Split (LitV xs) -> do
         k s (map (E_Lit 1) xs)
 
       Split eff -> do
         comp s eff $ \s e -> do
-          shareE s e $ \s tmp -> do
-            let Size{size} = sizeE e
-            k s [E_TmpIndexed tmp i | i <- [0..size-1]]
+          let size@(Size n) = sizeE e
+          shareO s size (O_Exp e) $ \s tmp -> do
+            k s [E_TmpIndexed tmp i | i <- [0..n-1]]
 
       LitV xs -> do
         k s (E_Lit (Size (length xs)) xs)
@@ -114,15 +98,27 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
       Combine e -> do
         k s (E_Combine e)
 
-shareE :: CS -> E [Bit] -> (CS -> Tmp [Bit] -> Prog) -> Prog
-shareE s@CS{u} e k = do
-  case e of
-    E_Tmp tmp -> k s tmp
+
+share1 :: CS -> Oper Bit -> (CS -> Tmp Bit -> Prog) -> Prog
+share1 s@CS{u} oper k = do
+  case oper of
+    --O_Exp (E_Tmp tmp) -> k s tmp
     _ -> do
       let tmpId = TmpId { u }
-      let tmp = Tmp (sizeE e) tmpId
-      P_Seq (S_Let tmp (O_Exp e)) $
+      let tmp = Tmp1 tmpId
+      P_Seq (S_Let tmp oper) $
         k s { u = u + 1 } tmp
+
+shareO :: CS -> Size -> Oper [Bit] -> (CS -> Tmp [Bit] -> Prog) -> Prog
+shareO s@CS{u} size oper k = do
+  case oper of
+    O_Exp (E_Tmp tmp) -> k s tmp
+    _ -> do
+      let tmpId = TmpId { u }
+      let tmp = Tmp size tmpId
+      P_Seq (S_Let tmp oper) $
+        k s { u = u + 1 } tmp
+
 
 trySimpAnd :: (E Bit, E Bit) -> Maybe (E Bit)
 trySimpAnd = \case

@@ -82,8 +82,8 @@ data Oper a where
   O_And :: E Bit -> E Bit -> Oper Bit
   O_Plus :: E Nat -> E Nat -> Oper Nat
   O_ReadRomByte :: RomId -> E Nat -> Oper Nat
-  O_Exp :: E [Bit] -> Oper [Bit] -- TODO: this is the problem!
-  --O_Exp :: Show a => E a -> Oper a -- can we be more general?
+  --O_Exp :: Show a => E a -> Oper a -- more general?
+  O_Exp :: E [Bit] -> Oper [Bit] -- TODO: Why is this really needed?
 
 -- program expressions; atomic/pure, so can be freely shared
 -- knows it's size
