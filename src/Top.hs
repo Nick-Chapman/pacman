@@ -2,11 +2,11 @@
 module Top (main) where
 
 import Control.Monad (when)
-import Pretty (pretty)
 import System.Environment (getArgs)
-import qualified SmallExamples
-import qualified Compile (elab)
+import qualified Code (pretty)
 import qualified EmulateWithSdl (main)
+import qualified SmallExamples (combined)
+import qualified System (elaborate)
 
 main :: IO ()
 main = do
@@ -26,7 +26,7 @@ again :: Bool -> IO ()
 again pic = do
   putStrLn "*rethinking emulation types*"
   let example = SmallExamples.combined
-  let code = Compile.elab example
-  putStr (pretty code)
+  let code = System.elaborate example
+  putStr (Code.pretty code)
   when pic $ EmulateWithSdl.main code
   pure ()

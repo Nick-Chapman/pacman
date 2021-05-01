@@ -1,16 +1,17 @@
 module EmulateWithSdl (main) where
 
+import Code (Code,State,Keys(..),Picture(..))
 import Control.Concurrent (threadDelay)
 import Data.List.Extra (groupSort)
 import Data.Map (Map)
-import Execute (Picture(..),State)
 import Foreign.C.Types (CInt)
+import Prelude hiding (init)
 import SDL (Renderer,Rectangle(..),V2(..),V4(..),Point(P),($=))
-import Types (Code,Key(..),XY(..),RGB(..),Keys(..))
+import Value (Key(..),XY(..),RGB(..))
+import qualified Code (init,runForOneFrame)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text (pack)
-import qualified Execute (init,runForOneFrame)
 import qualified SDL
 
 data World = World { state :: State, keys :: Keys, frame :: Int}
@@ -27,14 +28,14 @@ main code = do
   win <- SDL.createWindow (Text.pack "PacMan") $ winConfig
   renderer <- SDL.createRenderer win (-1) SDL.defaultRenderer
   let assets = DrawAssets { renderer, sf }
-  (context,state,prog) <- Execute.init code
+  (context,state,prog) <- Code.init code
   let keys = Keys { pressed = Set.empty }
   let world0 = World { state, keys, frame = 0 }
   let
     loop :: World -> IO ()
     loop World{state,keys,frame} = do
       --putStrLn $ "frame: " ++ show frame
-      (picture,state) <- Execute.runForOneFrame prog context state keys
+      (picture,state) <- Code.runForOneFrame prog context state keys
       drawEverything assets picture
       events <- SDL.pollEvents
       let interesting = [ i | e <- events, i <- interestingOf e ]

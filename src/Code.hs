@@ -1,24 +1,84 @@
-module Execute(
-  Context, State, Picture(..),
-  init, runForOneFrame,
+module Code (
+  Code(..), Prog(..), Step(..), E(..), Oper(..), eNot,
+  RegId, Reg(..), Tmp(..), TmpId(..), RomId, RomSpec(..),
+  pretty,
+  init, Context, State, runForOneFrame, Keys(..), Picture(..),
   ) where
 
-import Prelude hiding (init)
 import Data.Map (Map)
+import Data.Set (Set)
+import Prelude hiding (init)
+import Rom (Rom)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import qualified Rom (load,lookup)
 
-import Rom
+import Value
 
-import Types (
-  -- code
-  Code(..), Prog(..), Step(..), E(..), Oper(..),
-  RegId(..), TmpId(..), RomId(..), RomSpec(..), Size(..), Reg(..), Tmp(..),
+-- full generated code. includes decs & prog
+data Code = Code
+  { regDecs :: [(RegId,Size)]
+  , romSpecs :: [(RomId,RomSpec)]
+  , entry :: Prog
+  }
 
-  -- values
-  Keys(..), XY(..),RGB(..), Bit(..),
-  fromBits, bitsOfInt, indexBits,
-  )
+-- statement in the generated program, works in context of some decs
+data Prog where
+  P_Halt :: Prog
+  P_Seq :: Step -> Prog -> Prog
+  P_If :: E Bit -> Prog -> Prog -> Prog
+
+-- basic program step (statement), which is sequenced in a program
+data Step where
+  S_Let :: Show a => Tmp a -> Oper a -> Step
+  S_SetReg :: Show a => Reg a -> E a -> Step
+  S_SetPixel :: XY (E Nat) -> RGB (E Nat) -> Step
+
+-- operation (non atomic/pure expression), will always be let-bound
+-- these things MUST be name
+data Oper a where
+  O_Reg :: Reg a -> Oper a
+  O_And :: E Bit -> E Bit -> Oper Bit
+  O_Plus :: E Nat -> E Nat -> Oper Nat
+  O_ReadRomByte :: RomId -> E Nat -> Oper Nat
+  --O_Exp :: Show a => E a -> Oper a -- more general?
+  O_Exp :: E [Bit] -> Oper [Bit] -- TODO: Why is this really needed?
+
+-- program expressions; atomic/pure, so can be freely shared
+-- knows it's size
+-- these things must *not* be named
+data E a where
+  E_KeyDown :: Key -> E Bit
+  E_Lit :: Size -> a -> E a
+  E_LitV :: Size -> [a] -> E [a]
+  E_Not :: E Bit -> E Bit
+  E_Tmp :: Tmp a -> E a
+  E_TmpIndexed :: Tmp [Bit] -> Int -> E Bit -- MSB-first
+  E_Combine :: [E Bit] -> E [Bit]
+  --E_Combine :: [E a] -> E [a] -- TODO: can we have this?
+
+-- TODO: break E into two levels E/A, with no recursion in E for Concat etc
+
+eNot :: E Bit -> E Bit
+eNot = \case
+  E_Lit z B1 -> E_Lit z B0
+  E_Lit z B0 -> E_Lit z B1
+  E_Not ebar -> ebar
+  e -> E_Not e
+
+data Reg a where
+  Reg :: Size -> RegId -> Reg [Bit]
+  Reg1 :: RegId -> Reg Bit
+
+data Tmp a where
+  Tmp :: Size -> TmpId -> Tmp [Bit]
+  Tmp1 :: TmpId -> Tmp Bit -- TODO: remove for less cases?
+
+data RomSpec = RomSpec { path :: String, size :: Int }
+
+newtype RegId = RegId { u :: Int } deriving (Eq,Ord,Num)
+newtype TmpId = TmpId { u :: Int } deriving (Eq,Ord)
+newtype RomId = RomId { u :: Int } deriving (Eq,Ord,Num)
 
 data Context = Context
   { roms :: Map RomId Rom
@@ -29,6 +89,8 @@ data State = State
   { regs :: Map RegId [Bit]
   -- TODO: rams will go here
   }
+
+newtype Keys = Keys { pressed :: Set Key }
 
 data Picture where
   Draw :: XY Int -> RGB Int -> Picture
@@ -44,9 +106,6 @@ init Code{entry=prog,regDecs,romSpecs} = do
     | (id,RomSpec {path,size}) <- romSpecs
     ]
   pure $ (Context {roms},State {regs},prog)
-
-zeroOf :: Int -> [Bit]
-zeroOf size = take size (repeat B0)
 
 -- make no use of IO, but nice for debug
 runForOneFrame :: Prog -> Context -> State -> Keys -> IO (Picture,State)
@@ -130,26 +189,6 @@ evalTmp RS{tmps} = \case
       [b] -> b
       bits -> error (show ("evalE/Tmp1",id,length bits))
 
-checkSize :: Size -> [Bit] -> [Bit]
-checkSize Size{size} xs =
-  if length xs == size then xs else
-    error (show ("checkSize",size,xs))
-
-notBit :: Bit -> Bit
-notBit = \case B1 -> B0; B0 -> B1
-
-andBit :: Bit -> Bit -> Bit
-andBit = \case
-  B0 -> \_ -> B0
-  B1 -> \x -> x
-
-plusBits :: [Bit] -> [Bit] -> [Bit]
-plusBits x y = do
-  let nx = length x
-  let ny = length y
-  let size = max nx ny
-  take size (bitsOfInt (Size (size+1)) (fromBits x + fromBits y))
-
 look :: (Ord k, Show k) => Map k v -> k -> v
 look m k = maybe (error (show ("look/missing",k))) id $ Map.lookup k m
 
@@ -171,3 +210,55 @@ pictureScreen :: Screen -> Picture
 pictureScreen Screen{m} = Pictures [ Draw (shift xy) rgb | (xy,rgb) <- Map.toList m ]
   where
     shift XY{x,y} = XY { x = x+8, y = y+8 }
+
+----------------------------------------------------------------------
+-- show
+
+instance Show Step where
+  show = \case
+    S_Let tmp oper -> "let " ++ show tmp ++ " = " ++ show oper
+    S_SetReg reg exp -> show reg ++ " := " ++ show exp
+    S_SetPixel xy rgb -> "set-pixel " ++ show xy ++ " := " ++ show rgb
+
+deriving instance Show (Oper a)
+deriving instance Show a => Show (E a)
+
+instance Show (Reg a) where
+  show = \case
+    Reg1 id -> show id
+    Reg size id -> show id ++ show size
+
+instance Show (Tmp a) where
+  show = \case
+    Tmp1 id -> show id
+    Tmp size id -> show id ++ show size
+
+instance Show RegId where show RegId{u} = "r"++show u
+instance Show TmpId where show TmpId{u} = "u"++show u
+instance Show RomId where show RomId{u} = "rom"++show u
+
+pretty :: Pretty a => a -> String
+pretty = unlines . lay
+
+class Pretty a where
+  lay :: a -> [String]
+
+instance Pretty Code where
+  lay Code{regDecs,entry} =
+    [ "reg " ++ show r ++ " : " ++ show s | (r,s) <- regDecs ]
+    ++ lay entry
+
+instance Pretty Prog where
+  lay = \case
+    P_Halt -> []
+    P_Seq step prog -> lay step ++ lay prog
+    P_If cond this that ->
+      ["if (" ++ show cond ++ ") {"]
+      ++ tab (lay this)
+      ++ ["} else {"]
+      ++ tab (lay that) ++ ["}"]
+
+instance Pretty Step where lay x = [show x]
+
+tab :: [String] -> [String]
+tab xs = [ "  " ++ x | x <- xs ]

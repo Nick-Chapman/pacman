@@ -1,11 +1,8 @@
 
 module SmallExamples (combined) where
 
-import Types (System(..),Eff(..),XY(..),RGB(..),E(..),Nat,Bit(..),Key(..),
-              Size(..), RomSpec(..), RomId(..),
-              bitsOfInt,
-              index,
-              eNot)
+import System
+import Value
 
 colSquare :: RomId -> Int -> Eff ()
 colSquare colRom i = do
@@ -39,7 +36,6 @@ decodeAsRGB w = do
     add3 x y z
   pure RGB { r, g, b }
   where add3 a b c = do ab <- Plus a b; Plus ab c
-
 
 combined :: System
 combined = do
@@ -154,7 +150,6 @@ ePosInt :: Size -> Int -> E Nat
 ePosInt size i = do
   let bits = bitsOfInt size i
   E_Lit Size { size = length bits } bits
-
 
 lit8 :: Int -> Eff (E Nat)
 lit8 i = do

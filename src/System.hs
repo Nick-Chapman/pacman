@@ -1,20 +1,46 @@
-module Compile(elab) where
+module System(
+  System(..), Eff(..), index, E(..), eNot, RomId, RomSpec(..),
+  elaborate,
+  ) where
 
-import Types (
-  -- source
-  System(..),Eff(..),
-  -- target
-  Code(..),Prog(..),Step(..),E(..),Oper(..),
-  RomSpec(..),RomId(..),
-  RegId(..), Size(..), Reg(..),
-  TmpId(..), Tmp(..),
-  -- runtime
-  Bit(..),
-  size1,
-  )
+import Control.Monad (ap,liftM)
+import Code
+import Value
 
-elab :: System -> Code
-elab = loop ES { regId = 0, regs = [], romId = 101, roms = [] }
+instance Functor Eff where fmap = liftM
+instance Applicative Eff where pure = return; (<*>) = ap
+instance Monad Eff where return = Ret; (>>=) = Bind
+
+-- top level effect; declare regs, load rom etc
+data System
+  = FrameEffect (Eff ())
+  | DeclareRom RomSpec (RomId -> System)
+  | DeclareReg1 (Reg Bit -> System)
+  | DeclareReg Size (Reg [Bit] -> System)
+
+-- the core effect type
+data Eff a where
+  Ret :: a -> Eff a
+  Bind :: Eff a -> (a -> Eff b) -> Eff b
+  CaseBit :: E Bit -> Eff Bit -- TODO: generalize any bounded type
+  SetPixel :: XY (E Nat) -> RGB (E Nat) -> Eff ()
+  GetReg :: Reg a -> Eff (E a)
+  SetReg :: Show a => Reg a -> E a -> Eff ()
+  And :: E Bit -> E Bit -> Eff (E Bit)
+  Plus :: E Nat -> E Nat -> Eff (E Nat)
+  ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
+  LitV :: [Bit] -> Eff (E [Bit]) -- TODO: need to know [a] ?
+  Split :: Eff (E [Bit]) -> Eff [E Bit]
+  Combine :: [E Bit] -> Eff (E [Bit])
+
+index :: Eff (E [Bit]) -> Int -> Eff (E Bit)
+index eff i = do
+  bits <- Split eff
+  pure $ indexBits bits i
+
+
+elaborate :: System -> Code
+elaborate = loop ES { regId = 0, regs = [], romId = 101, roms = [] }
   where
     loop :: ES -> System -> Code
     loop es@ES{regId,regs,romId,roms} = \case
@@ -31,7 +57,7 @@ elab = loop ES { regId = 0, regs = [], romId = 101, roms = [] }
         let prog = compile0 eff
         Code { romSpecs = roms, regDecs = regs, entry = prog }
 
-data ES = ES -- elab state
+data ES = ES -- elaboration state
   { regId :: RegId
   , regs :: [(RegId,Size)]
   , romId :: RomId
@@ -98,7 +124,6 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
       Combine e -> do
         k s (E_Combine e)
 
-
 share1 :: CS -> Oper Bit -> (CS -> Tmp Bit -> Prog) -> Prog
 share1 s@CS{u} oper k = do
   case oper of
@@ -119,7 +144,6 @@ shareO s@CS{u} size oper k = do
       P_Seq (S_Let tmp oper) $
         k s { u = u + 1 } tmp
 
-
 trySimpAnd :: (E Bit, E Bit) -> Maybe (E Bit)
 trySimpAnd = \case
   (z@(E_Lit _ B0), _) -> Just z
@@ -137,5 +161,5 @@ sizeE = \case
   E_Not e -> sizeE e
   E_Tmp (Tmp size _) -> size
   E_Tmp (Tmp1 _) -> Size 1
-  E_TmpIndexed _ _ -> size1
+  E_TmpIndexed _ _ -> Size 1
   E_Combine es -> sum [ sizeE e | e <- es ]
