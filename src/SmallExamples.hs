@@ -4,21 +4,36 @@ module SmallExamples (combined) where
 import System
 import Value
 
-colSquare :: RomId -> Int -> Eff ()
-colSquare colRom i = do
+combined :: System
+combined = do
+  DeclareReg1 $ \enterLastReg -> do
+  DeclareReg1 $ \highReg -> do
+  DeclareReg Size {size = 7} $ \xposReg -> do
+  let ms = MS {enterLastReg,highReg,xposReg}
+  DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
+  FrameEffect $ do
+    showCols 5 16 colRom
+    movingSquare 5 ms
+    pure ()
+
+showCols :: Int -> Int -> RomId -> Eff ()
+showCols w n colRom = sequence_ [colSquare w colRom i | i <- [0..n-1]]
+
+colSquare :: Int -> RomId -> Int -> Eff ()
+colSquare w colRom i = do
   let nib = nibble i
   byte <- ReadRomByte colRom nib
   col <- decodeAsRGB byte
   let xy = XY { x = nat8 (14 * i), y = nat8 0 }
-  setSquare 5 xy col
+  setSquare w xy col
 
 decodeAsRGB :: E Nat -> Eff (RGB (E Nat))
 decodeAsRGB w = do
   let
     bit :: Int -> Int -> Eff (E Nat)
     bit i v = do
-      c <- pure w `index` i
-      muxBits c (lit8 v) (lit8 0)
+      c <- w `index` i
+      muxBits c (nat8 v) (nat8 0)
   r <- do
     x <- bit 0 0x21
     y <- bit 1 0x47
@@ -37,15 +52,15 @@ decodeAsRGB w = do
   pure RGB { r, g, b }
   where add3 a b c = do ab <- Plus a b; Plus ab c
 
-combined :: System
-combined = do
-  DeclareReg1 $ \enterLastReg -> do
-  DeclareReg1 $ \highReg -> do
-  DeclareReg Size {size = 7} $ \xposReg -> do
-  DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
-  FrameEffect $ do
 
-    sequence_ [colSquare colRom i | i <- [0..15]]
+data MS = MS
+  { xposReg :: Reg Nat
+  , enterLastReg :: Reg Bit
+  , highReg :: Reg Bit
+  }
+
+movingSquare :: Int -> MS -> Eff ()
+movingSquare w MS{xposReg,enterLastReg,highReg}= do
 
     let goingRight = E_KeyDown KeyX
     let shift = E_KeyDown KeyShift -- colour
@@ -75,7 +90,7 @@ combined = do
     loc <- switch high here there
     col <- switch shift green red
 
-    setSquare 5 loc col
+    setSquare w loc col
 
 setSquare :: Int -> XY (E Nat) -> RGB (E Nat) -> Eff ()
 setSquare width loc col = do
@@ -88,7 +103,7 @@ addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
   y <- Plus y1 y2
   pure $ XY {x,y}
 
-muxBits :: E Bit -> Eff (E [Bit]) -> Eff (E [Bit]) -> Eff (E [Bit])
+muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
 muxBits sel yes no = do
   ys <- Split yes
   ns <- Split no
@@ -147,10 +162,4 @@ one = ePosInt (Size 1) 1
 ePosInt :: Size -> Int -> E Nat
 ePosInt size i = do
   let bits = bitsOfInt size i
-  E_Lit Size { size = length bits } bits
-
-lit8 :: Int -> Eff (E Nat)
-lit8 i = do
-  let size = 8
-  let bits = bitsOfInt size i
-  LitV bits
+  E_Nat Size { size = length bits } bits

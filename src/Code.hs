@@ -47,6 +47,7 @@ data Oper a where
 -- these things must *not* be named
 data E a where
   E_KeyDown :: Key -> E Bit
+  E_Nat :: Size -> Nat -> E Nat
   E_Lit :: Size -> a -> E a
   E_Not :: E Bit -> E Bit
   E_Tmp :: Tmp a -> E a
@@ -174,6 +175,7 @@ evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
 evalE :: RS -> E a -> a
 evalE rs@RS{keys=Keys{pressed}} = \case
   E_KeyDown key -> if Set.member key pressed then B1 else B0
+  E_Nat _ a -> a
   E_Lit _ a -> a
   E_Not e -> notBit (evalE rs e)
   E_Tmp tmp -> evalTmp rs tmp
@@ -212,30 +214,7 @@ pictureScreen Screen{m} = Pictures [ Draw (shift xy) rgb | (xy,rgb) <- Map.toLis
     shift XY{x,y} = XY { x = x+8, y = y+8 }
 
 ----------------------------------------------------------------------
--- show
-
-instance Show Step where
-  show = \case
-    S_Let tmp oper -> "let " ++ show tmp ++ " = " ++ show oper
-    S_SetReg reg exp -> show reg ++ " := " ++ show exp
-    S_SetPixel xy rgb -> "set-pixel " ++ show xy ++ " := " ++ show rgb
-
-deriving instance Show (Oper a)
-deriving instance Show a => Show (E a)
-
-instance Show (Reg a) where
-  show = \case
-    Reg1 id -> show id
-    Reg size id -> show id ++ show size
-
-instance Show (Tmp a) where
-  show = \case
-    Tmp1 id -> show id
-    Tmp size id -> show id ++ show size
-
-instance Show RegId where show RegId{u} = "r"++show u
-instance Show TmpId where show TmpId{u} = "u"++show u
-instance Show RomId where show RomId{u} = "rom"++show u
+-- pretty/show
 
 pretty :: Pretty a => a -> String
 pretty = unlines . lay
@@ -244,9 +223,10 @@ class Pretty a where
   lay :: a -> [String]
 
 instance Pretty Code where
-  lay Code{regDecs,entry} =
-    [ "reg " ++ show r ++ " : " ++ show s | (r,s) <- regDecs ]
-    ++ lay entry
+  lay Code{regDecs,romSpecs,entry} =
+    [ "reg " ++ show id ++ " : " ++ show size | (id,size) <- regDecs ] ++
+    [ "rom " ++ show id ++ " : " ++ show spec | (id,spec) <- romSpecs ] ++
+    lay entry
 
 instance Pretty Prog where
   lay = \case
@@ -262,3 +242,51 @@ instance Pretty Step where lay x = [show x]
 
 tab :: [String] -> [String]
 tab xs = [ "  " ++ x | x <- xs ]
+
+instance Show Code where show = pretty
+
+instance Show Step where
+  show = \case
+    S_Let tmp oper ->
+      "let " ++ show tmp ++ " : " ++ show (sizeOfTmp tmp) ++ " = " ++ show oper
+    S_SetReg reg exp -> show reg ++ " := " ++ show exp
+    S_SetPixel xy rgb -> "set-pixel " ++ show xy ++ " := " ++ show rgb
+
+sizeOfTmp :: Tmp a -> Size
+sizeOfTmp = \case
+  Tmp1 _ -> Size 1
+  Tmp size _ -> size
+
+instance Show a => Show (Oper a) where
+  show = \case
+    O_And e1 e2 -> show e1 ++ " & " ++ show e2
+    O_Plus e1 e2 -> show e1 ++ " + " ++ show e2
+    O_Reg (Reg _size id) -> show id
+    O_Reg (Reg1 id) -> show id
+    O_ReadRomByte romId a -> show romId ++ "[" ++ show a ++ "]"
+
+instance Show a => Show (E a) where
+  show = \case
+    E_KeyDown key -> "pressed(" ++ show key ++ ")"
+    E_Nat (Size n) nat -> show n ++ "'" ++ show (fromBits nat)
+    E_Lit _ a -> show a
+    E_Not e -> "!" ++ show e
+    E_Tmp tmp -> show tmp
+    E_TmpIndexed e i -> show e ++ "[" ++ show i ++ "]"
+    E_Combine es -> "{" ++ show es ++ "}"
+
+instance Show (Reg a) where
+  show = \case
+    Reg1 id -> show id
+    Reg _size id -> show id ++ show _size
+
+instance Show (Tmp a) where
+  show = \case
+    Tmp1 id -> show id
+    Tmp _size id -> show id -- ++ show _size
+
+deriving instance Show RomSpec
+
+instance Show RegId where show RegId{u} = "r"++show u
+instance Show TmpId where show TmpId{u} = "u"++show u
+instance Show RomId where show RomId{u} = "rom"++show u

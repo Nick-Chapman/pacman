@@ -3,7 +3,6 @@ module Top (main) where
 
 import Control.Monad (when)
 import System.Environment (getArgs)
-import qualified Code (pretty)
 import qualified EmulateWithSdl (main)
 import qualified SmallExamples (combined)
 import qualified System (elaborate)
@@ -27,6 +26,12 @@ again pic = do
   putStrLn "*rethinking emulation types*"
   let example = SmallExamples.combined
   let code = System.elaborate example
-  putStr (Code.pretty code)
+  generateFile "small" code
   when pic $ EmulateWithSdl.main code
   pure ()
+
+generateFile :: Show a => String -> a -> IO ()
+generateFile tag a = do
+  let fp :: FilePath = "gen/" ++ tag ++ ".out"
+  putStrLn $ "Writing file: " <> fp
+  writeFile fp (show a)

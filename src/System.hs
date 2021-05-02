@@ -1,5 +1,5 @@
 module System(
-  System(..), Eff(..), index, E(..), eNot, RomId, RomSpec(..),
+  System(..), Eff(..), index, E(..), eNot, Reg, RomId, RomSpec(..),
   elaborate,
   ) where
 
@@ -29,15 +29,13 @@ data Eff a where
   And :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
-  LitV :: [a] -> Eff (E [a])
-  Split :: Eff (E [Bit]) -> Eff [E Bit]
+  Split :: E [Bit] -> Eff [E Bit]
   Combine :: [E Bit] -> Eff (E [Bit])
 
-index :: Eff (E [Bit]) -> Int -> Eff (E Bit)
-index eff i = do
-  bits <- Split eff
+index :: E [Bit] -> Int -> Eff (E Bit)
+index e i = do
+  bits <- Split e
   pure $ indexBits bits i
-
 
 elaborate :: System -> Code
 elaborate = loop ES { regId = 0, regs = [], romId = 101, roms = [] }
@@ -92,10 +90,13 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
           k s (E_Tmp tmp)
 
       Plus e1 e2 -> do
-        let size = max (sizeE e1) (sizeE e2)
-        let oper = O_Plus e1 e2
-        shareV s size oper $ \s tmp ->
-          k s (E_Tmp tmp)
+        case (trySimpPlus (e1,e2)) of
+          Just e -> k s e
+          Nothing -> do
+            let size = max (sizeE e1) (sizeE e2)
+            let oper = O_Plus e1 e2
+            shareV s size oper $ \s tmp ->
+              k s (E_Tmp tmp)
 
       And e1 e2 -> do
         case (trySimpAnd (e1,e2)) of
@@ -109,17 +110,14 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
         shareV s (Size 8) (O_ReadRomByte rid a) $ \s tmp -> do
           k s (E_Tmp tmp)
 
-      Split eff -> do
-        comp s eff $ \s e -> do
-          case e of
-            E_Lit _ xs -> k s (map (E_Lit 1) xs)
-            E_Combine xs -> k s xs
-            E_Tmp tmp -> do
-              let Size n = sizeE e
-              k s [E_TmpIndexed tmp i | i <- [0..n-1]]
-
-      LitV xs -> do
-        k s (E_Lit (Size (length xs)) xs)
+      Split e-> do
+        case e of
+          E_Nat _ xs -> k s (map (E_Lit 1) xs)
+          E_Lit _ xs -> k s (map (E_Lit 1) xs)
+          E_Combine xs -> k s xs
+          E_Tmp tmp -> do
+            let Size n = sizeE e
+            k s [E_TmpIndexed tmp i | i <- [0..n-1]]
 
       Combine e -> do
         k s (E_Combine e)
@@ -145,9 +143,17 @@ trySimpAnd = \case
   _ ->
     Nothing
 
+trySimpPlus :: (E Nat, E Nat) -> Maybe (E Nat)
+trySimpPlus = \case
+  (E_Nat (Size n1) xs, E_Nat (Size n2) ys) ->
+    Just (E_Nat (Size (max n1 n2)) (plusBits xs ys))
+  _ -> Nothing
+
+
 sizeE :: E a -> Size
 sizeE = \case
   E_KeyDown{} -> Size 1
+  E_Nat size _ -> size
   E_Lit size _ -> size
   E_Not e -> sizeE e
   E_Tmp (Tmp size _) -> size
