@@ -1,11 +1,14 @@
 module System(
   System(..), Eff(..), index, E(..), eNot, Reg, RomId, RomSpec(..),
-  elaborate,
+  Conf(..),elaborate,
   ) where
 
 import Control.Monad (ap,liftM)
 import Code
 import Value
+import Rom (Rom)
+import Data.Map (Map)
+import qualified Data.Map.Strict as Map
 
 instance Functor Eff where fmap = liftM
 instance Applicative Eff where pure = return; (<*>) = ap
@@ -37,13 +40,25 @@ index e i = do
   bits <- Split e
   pure $ indexBits bits i
 
-elaborate :: System -> Code
-elaborate = loop ES { regId = 0, regs = [], romId = 101, roms = [] }
+data ES = ES -- elaboration state
+  { regId :: RegId
+  , regs :: [(RegId,Size)]
+  , romId :: RomId
+  , romSpecs :: [(RomId,RomSpec)]
+  }
+
+es0 :: ES
+es0 = ES { regId = 0, regs = [], romId = 101, romSpecs = [] }
+
+data Conf = Conf { specializeRoms :: Bool }
+
+elaborate :: Conf -> System -> IO Code
+elaborate Conf{specializeRoms} = loop es0
   where
-    loop :: ES -> System -> Code
-    loop es@ES{regId,regs,romId,roms} = \case
+    loop :: ES -> System -> IO Code
+    loop es@ES{regId,regs,romId,romSpecs} = \case
       DeclareRom spec f -> do
-        loop es { romId = romId + 1, roms = (romId,spec) : roms } (f romId)
+        loop es { romId = romId + 1, romSpecs = (romId,spec) : romSpecs } (f romId)
       DeclareReg size f -> do
         let reg = Reg size regId
         loop es { regId = regId + 1, regs = (regId,size) : regs } (f reg)
@@ -52,20 +67,18 @@ elaborate = loop ES { regId = 0, regs = [], romId = 101, roms = [] }
         let reg = Reg1 regId
         loop es { regId = regId + 1, regs = (regId,size) : regs } (f reg)
       FrameEffect eff -> do
-        let prog = compile0 eff
-        Code { romSpecs = roms, regDecs = regs, entry = prog }
+        roms <- if specializeRoms then loadRoms romSpecs else pure Map.empty
+        let prog = compile0 roms eff
+        pure $ Code { romSpecs, regDecs = regs, entry = prog }
 
-data ES = ES -- elaboration state
-  { regId :: RegId
-  , regs :: [(RegId,Size)]
-  , romId :: RomId
-  , roms :: [(RomId,RomSpec)]
+data CS = CS
+  { u :: Int
   }
 
-data CS = CS { u :: Int }
+type Roms = Map RomId Rom
 
-compile0 :: Eff () -> Prog
-compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
+compile0 :: Roms -> Eff () -> Prog
+compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
   where
     comp :: CS -> Eff a -> (CS -> a -> Prog) -> Prog
     comp s eff k = case eff of
@@ -107,8 +120,11 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
               k s (E_Tmp tmp)
 
       ReadRomByte rid a -> do
-        shareV s (Size 8) (O_ReadRomByte rid a) $ \s tmp -> do
-          k s (E_Tmp tmp)
+        case (a,Map.lookup rid roms) of
+          (E_Nat _ a, Just rom) -> k s (E_Nat 8 (readRom rom a))
+          _ -> do
+            shareV s (Size 8) (O_ReadRomByte rid a) $ \s tmp -> do
+              k s (E_Tmp tmp)
 
       Split e-> do
         case e of
@@ -119,8 +135,16 @@ compile0 eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
             let Size n = sizeE e
             k s [E_TmpIndexed tmp i | i <- [0..n-1]]
 
-      Combine e -> do
-        k s (E_Combine e)
+      Combine es -> do
+        case tryLiteralizeBits es of
+          Just bs -> k s (E_Nat (Size (length bs)) bs)
+          Nothing ->
+            k s (E_Combine es)
+
+tryLiteralizeBits :: [E Bit] -> Maybe [Bit]
+tryLiteralizeBits es = do
+  let bs = [ b | e <- es, E_Lit _ b <- [e] ]
+  if length bs == length es then Just bs else Nothing
 
 share1 :: CS -> Oper Bit -> (CS -> Tmp Bit -> Prog) -> Prog
 share1 s@CS{u} oper k = do

@@ -5,7 +5,7 @@ import Control.Monad (when)
 import System.Environment (getArgs)
 import qualified EmulateWithSdl (main)
 import qualified SmallExamples (combined)
-import qualified System (elaborate)
+import qualified System (Conf(..),elaborate)
 
 main :: IO ()
 main = do
@@ -25,7 +25,8 @@ again :: Bool -> IO ()
 again pic = do
   putStrLn "*rethinking emulation types*"
   let example = SmallExamples.combined
-  let code = System.elaborate example
+  let specializeRoms = False
+  code <- System.elaborate System.Conf { specializeRoms } example
   generateFile "small" code
   when pic $ EmulateWithSdl.main code
   pure ()

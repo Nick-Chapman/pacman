@@ -2,6 +2,7 @@ module Code (
   Code(..), Prog(..), Step(..), E(..), Oper(..), eNot,
   RegId, Reg(..), Tmp(..), TmpId(..), RomId, RomSpec(..),
   pretty,
+  loadRoms, readRom,
   init, Context, State, runForOneFrame, Keys(..), Picture(..),
   ) where
 
@@ -97,12 +98,17 @@ init :: Code -> IO (Context,State,Prog) -- IO to load roms from file
 init Code{entry=prog,regDecs,romSpecs} = do
   -- TODO: create ram from ram-spec
   let regs = Map.fromList [ (r,zeroOf size) | (r,Size {size}) <- regDecs ]
-  roms <-
-    Map.fromList <$> sequence
-    [ do rom <- Rom.load size path; pure $ (id,rom)
-    | (id,RomSpec {path,size}) <- romSpecs
-    ]
+  roms <- loadRoms romSpecs
   pure $ (Context {roms},State {regs},prog)
+
+
+loadRoms :: [(RomId,RomSpec)] -> IO (Map RomId Rom)
+loadRoms romSpecs =
+  Map.fromList <$> sequence
+  [ do rom <- Rom.load size path; pure $ (id,rom)
+  | (id,RomSpec {path,size}) <- romSpecs
+  ]
+
 
 -- make no use of IO, but nice for debug
 runForOneFrame :: Prog -> Context -> State -> Keys -> IO (Picture,State)
@@ -170,7 +176,11 @@ evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
       [b] -> b
       bits -> error (show ("evalE/Reg1",id,length bits))
   O_ReadRomByte romId a ->
-    bitsOfInt (Size 8) (fromIntegral (Rom.lookup (look roms romId) (fromBits (evalE rs a))))
+    readRom (look roms romId) (evalE rs a)
+
+readRom :: Rom -> Nat -> Nat
+readRom rom a =
+  bitsOfInt (Size 8) (fromIntegral (Rom.lookup rom (fromBits a)))
 
 evalE :: RS -> E a -> a
 evalE rs@RS{keys=Keys{pressed}} = \case
