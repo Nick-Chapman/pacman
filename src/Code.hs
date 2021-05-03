@@ -11,6 +11,7 @@ import Data.Set (Set)
 import Prelude hiding (init)
 import Rom (Rom)
 import Ram (Ram)
+import Text.Printf (printf)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Rom (load,lookup)
@@ -310,7 +311,7 @@ instance Show a => Show (Oper a) where
 instance Show a => Show (E a) where
   show = \case
     E_KeyDown key -> "pressed(" ++ show key ++ ")"
-    E_Nat nat -> show (sizeOfNat nat) ++ "'" ++ show (nat2int nat)
+    E_Nat nat -> show (sizeOfNat nat) ++ "'" ++ printf "%X" (nat2int nat)
     E_Lit _ a -> show a
     E_Not e -> "!" ++ show e
     E_Tmp tmp -> show tmp
