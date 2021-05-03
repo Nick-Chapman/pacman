@@ -123,7 +123,7 @@ renderPicture DrawAssets{renderer=r,sf} = traverse
         SDL.fillRect r (Just rect)
 
 darkGrey :: RGB Int
-darkGrey = RGB { r = 20, g = 20, b = 20 }
+darkGrey = RGB { r = 50, g = 50, b = 50 }
 
 setColor :: SDL.Renderer -> RGB Int -> IO ()
 setColor r c = SDL.rendererDrawColor r $= fromRGB c
