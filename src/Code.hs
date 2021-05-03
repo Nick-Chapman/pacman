@@ -48,7 +48,7 @@ data Oper a where
 -- these things must *not* be named
 data E a where
   E_KeyDown :: Key -> E Bit
-  E_Nat :: Size -> Nat -> E Nat
+  E_Nat :: Nat -> E Nat
   E_Lit :: Size -> a -> E a
   E_Not :: E Bit -> E Bit
   E_Tmp :: Tmp a -> E a
@@ -100,6 +100,9 @@ init Code{entry=prog,regDecs,romSpecs} = do
   let regs = Map.fromList [ (r,zeroOf size) | (r,Size {size}) <- regDecs ]
   roms <- loadRoms romSpecs
   pure $ (Context {roms},State {regs},prog)
+    where
+      zeroOf :: Int -> [Bit]
+      zeroOf size = take size (repeat B0)
 
 
 loadRoms :: [(RomId,RomSpec)] -> IO (Map RomId Rom)
@@ -147,8 +150,8 @@ evalStep rs@RS{screen,state,tmps} = \case
     rs { screen =
          setScreenPixel
          screen
-         (fmap (fromBits . evalE rs) xy)
-         (fmap (fromBits . evalE rs) rgb)
+         (fmap (nat2int . evalE rs) xy)
+         (fmap (nat2int . evalE rs) rgb)
        }
 
 bindTmp :: Tmps -> a -> Tmp a -> Tmps
@@ -168,7 +171,7 @@ updateReg s@State{regs} val = \case
 evalOper :: RS -> Oper a -> a
 evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
   O_And e1 e2 -> andBit (evalE rs e1) (evalE rs e2)
-  O_Plus e1 e2 -> plusBits (evalE rs e1) (evalE rs e2)
+  O_Plus e1 e2 -> plusNat (evalE rs e1) (evalE rs e2)
   O_Reg (Reg size id) -> do
     checkSize size (look regs id)
   O_Reg (Reg1 id) ->
@@ -179,13 +182,14 @@ evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
     readRom (look roms romId) (evalE rs a)
 
 readRom :: Rom -> Nat -> Nat
-readRom rom a =
-  bitsOfInt (Size 8) (fromIntegral (Rom.lookup rom (fromBits a)))
+readRom rom a = do
+  sizedNat (Size 8) (fromIntegral (Rom.lookup rom (nat2int a)))
+  --bitsOfInt (fromIntegral (Rom.lookup rom (fromBits a)))
 
 evalE :: RS -> E a -> a
 evalE rs@RS{keys=Keys{pressed}} = \case
   E_KeyDown key -> if Set.member key pressed then B1 else B0
-  E_Nat _ a -> a
+  E_Nat a -> a
   E_Lit _ a -> a
   E_Not e -> notBit (evalE rs e)
   E_Tmp tmp -> evalTmp rs tmp
@@ -278,7 +282,7 @@ instance Show a => Show (Oper a) where
 instance Show a => Show (E a) where
   show = \case
     E_KeyDown key -> "pressed(" ++ show key ++ ")"
-    E_Nat (Size n) nat -> show n ++ "'" ++ show (fromBits nat)
+    E_Nat nat -> show (sizeOfNat nat) ++ "'" ++ show (nat2int nat)
     E_Lit _ a -> show a
     E_Not e -> "!" ++ show e
     E_Tmp tmp -> show tmp
@@ -293,7 +297,7 @@ instance Show (Reg a) where
 instance Show (Tmp a) where
   show = \case
     Tmp1 id -> show id
-    Tmp _size id -> show id -- ++ show _size
+    Tmp _size id -> show id
 
 deriving instance Show RomSpec
 

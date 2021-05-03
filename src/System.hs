@@ -35,6 +35,8 @@ data Eff a where
   Split :: E [Bit] -> Eff [E Bit]
   Combine :: [E Bit] -> Eff (E [Bit])
 
+  ReadMem :: E Nat -> Eff (E Nat)
+
 index :: E [Bit] -> Int -> Eff (E Bit)
 index e i = do
   bits <- Split e
@@ -82,6 +84,9 @@ compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
   where
     comp :: CS -> Eff a -> (CS -> a -> Prog) -> Prog
     comp s eff k = case eff of
+
+      ReadMem{} -> undefined
+
       Ret a -> k s a
       Bind e f -> comp s e $ \s a -> comp s (f a) k
 
@@ -121,23 +126,23 @@ compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
 
       ReadRomByte rid a -> do
         case (a,Map.lookup rid roms) of
-          (E_Nat _ a, Just rom) -> k s (E_Nat 8 (readRom rom a))
+          (E_Nat a, Just rom) -> k s (E_Nat (readRom rom a))
           _ -> do
             shareV s (Size 8) (O_ReadRomByte rid a) $ \s tmp -> do
               k s (E_Tmp tmp)
 
-      Split e-> do
+      Split e -> do
         case e of
-          E_Nat _ xs -> k s (map (E_Lit 1) xs)
+          E_Nat xs -> k s (map (E_Lit 1) xs)
           E_Lit _ xs -> k s (map (E_Lit 1) xs)
           E_Combine xs -> k s xs
           E_Tmp tmp -> do
             let Size n = sizeE e
-            k s [E_TmpIndexed tmp i | i <- [0..n-1]]
+            k s [E_TmpIndexed tmp i | i <- reverse [0..n-1]]
 
       Combine es -> do
         case tryLiteralizeBits es of
-          Just bs -> k s (E_Nat (Size (length bs)) bs)
+          Just xs -> k s (E_Nat xs)
           Nothing ->
             k s (E_Combine es)
 
@@ -169,15 +174,13 @@ trySimpAnd = \case
 
 trySimpPlus :: (E Nat, E Nat) -> Maybe (E Nat)
 trySimpPlus = \case
-  (E_Nat (Size n1) xs, E_Nat (Size n2) ys) ->
-    Just (E_Nat (Size (max n1 n2)) (plusBits xs ys))
+  (E_Nat n1, E_Nat n2) -> Just (E_Nat (plusNat n1 n2))
   _ -> Nothing
-
 
 sizeE :: E a -> Size
 sizeE = \case
   E_KeyDown{} -> Size 1
-  E_Nat size _ -> size
+  E_Nat nat -> sizeOfNat nat
   E_Lit size _ -> size
   E_Not e -> sizeE e
   E_Tmp (Tmp size _) -> size

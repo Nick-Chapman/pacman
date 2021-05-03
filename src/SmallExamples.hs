@@ -1,4 +1,3 @@
-
 module SmallExamples (combined) where
 
 import System
@@ -151,15 +150,14 @@ andG = And
 --andG x y = switch x y _zero -- explode/test-const prop
 
 nat8 :: Int -> E Nat
-nat8 = ePosInt (Size 8)
+nat8 = eSized 8
 
 nibble :: Int -> E Nat
-nibble = ePosInt (Size 4)
+nibble = eSized 4
 
 one :: E [Bit]
-one = ePosInt (Size 1) 1
+one = eSized (Size 1) 1
 
-ePosInt :: Size -> Int -> E Nat
-ePosInt size i = do
-  let bits = bitsOfInt size i
-  E_Nat Size { size = length bits } bits
+eSized :: Size -> Int -> E Nat
+eSized size i = do
+  E_Nat (sizedNat size i)

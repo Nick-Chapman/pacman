@@ -1,9 +1,10 @@
-
 module Top (main) where
 
 import Control.Monad (when)
+import System (System)
 import System.Environment (getArgs)
 import qualified EmulateWithSdl (main)
+import qualified PacGraphics (debug,screen)
 import qualified SmallExamples (combined)
 import qualified System (Conf(..),elaborate)
 
@@ -11,21 +12,31 @@ main :: IO ()
 main = do
   args <- getArgs
   case parseArgs args of
-    Again pic -> again pic
+    Mode conf -> run conf
 
-data Mode = Again Bool
+data Mode = Mode Conf
+data Conf = Conf { example :: System, pic :: Bool , specializeRoms :: Bool }
 
 parseArgs :: [String] -> Mode
-parseArgs = \case
-  [] -> Again False
-  ["pic"] -> Again True
-  xs -> error (show ("parseArgs",xs))
+parseArgs = do
+  loop Conf
+    { example = PacGraphics.debug
+    , pic = True
+    , specializeRoms = True
+    }
+  where
+    loop :: Conf -> [String] -> Mode
+    loop conf = \case
+      [] -> Mode conf
+      "nopic":xs -> loop conf { pic = False } xs
+      "slow":xs -> loop conf { specializeRoms = False } xs
+      "combined":xs -> loop conf { example = SmallExamples.combined } xs
+      "screen":xs -> loop conf { example = PacGraphics.screen } xs -- TODO
+      xs -> error (show ("parseArgs",xs))
 
-again :: Bool -> IO ()
-again pic = do
+run :: Conf -> IO ()
+run Conf{example,pic,specializeRoms} = do
   putStrLn "*rethinking emulation types*"
-  let example = SmallExamples.combined
-  let specializeRoms = False
   code <- System.elaborate System.Conf { specializeRoms } example
   generateFile "small" code
   when pic $ EmulateWithSdl.main code
