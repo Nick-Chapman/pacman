@@ -1,36 +1,42 @@
 
-module PacGraphics (debug,screen) where
+module PacGraphics (tiles,sprites,screen) where
 
 import Data.List (transpose)
 import System
 import Value
 
-debug :: System
-debug =
-  DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
-  DeclareRom (RomSpec { path = "roms/82s126.4a", size = 256 }) $ \palRom -> do
-  DeclareRom (RomSpec { path = "roms/pacman.5e", size = 4096 }) $ \tileRom -> do
-  --DeclareRom (RomSpec { path = "roms/pacman.5f", size = 4096 }) $ \sprite -> do
-  let mac = Mac { colRom, palRom, tileRom }
+tiles :: System
+tiles = withRoms $ \mac -> do
   FrameEffect $ do
     seeCols mac
     seePals mac
     seeTiles mac
 
+sprites :: System
+sprites = withRoms $ \mac -> do
+  FrameEffect $ do
+    seeCols mac
+    seePals mac
+    seeSprites mac
+
 screen :: System
-screen =
+screen = withRoms $ \mac -> do
+  FrameEffect $ do
+    seeScreen mac -- TODO: goal!
+
+withRoms :: (Mac -> System) -> System
+withRoms f =
   DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
   DeclareRom (RomSpec { path = "roms/82s126.4a", size = 256 }) $ \palRom -> do
   DeclareRom (RomSpec { path = "roms/pacman.5e", size = 4096 }) $ \tileRom -> do
-  --DeclareRom (RomSpec { path = "roms/pacman.5f", size = 4096 }) $ \sprite -> do
-  let mac = Mac { colRom, palRom, tileRom }
-  FrameEffect $ do
-    seeScreen mac -- TODO: goal
+  DeclareRom (RomSpec { path = "roms/pacman.5f", size = 4096 }) $ \spriteRom -> do
+  f (Mac { colRom, palRom, tileRom, spriteRom })
 
 data Mac = Mac
   { colRom :: RomId
   , palRom :: RomId
   , tileRom :: RomId
+  , spriteRom :: RomId
   }
 
 ----------------------------------------------------------------------
@@ -41,7 +47,7 @@ seeCols Mac{colRom} = sequence_
   [ do
       b <- ReadRomByte colRom (eSized (Size 4) i)
       col <- decodeAsRGB b
-      let xy = XY { x = byte (14 * i), y = byte 0 }
+      let xy = XY { x = nat8 (14 * i), y = nat8 0 }
       setSquare 14 xy col
   |
     i <- [0..15]
@@ -54,7 +60,7 @@ seePals mac = sequence_
       let pi = PaletteIndex (eSized 6 i)
       palette <- readPalette mac pi
       let w = 7
-      let xy = XY { x = byte (w * i), y = byte (yoff + w * j) }
+      let xy = XY { x = nat8 (w * i), y = nat8 (yoff + w * j) }
       rgb <- resolvePaletteItemIndex palette pii
       setSquare w xy rgb
   |
@@ -68,19 +74,37 @@ seeTiles mac = do
   palette <- readPalette mac pi
   sequence_
     [ do
-        let yoff = 80
+        let xoff = 30
+        let yoff = 100
         let i = 16*y + x
-        let xy = XY { x = byte (30 + 10*x), y = byte (yoff + 10*y) }
-        tile <- readTile mac (TI (byte i))
+        let xy = XY { x = nat8 (xoff + 10*x), y = nat9 (yoff + 10*y) }
+        tile <- readTile mac (TI (nat8 i))
         drawTile1 xy tile palette
     |
       x <- [0..15]
     , y <- [0..15]
     ]
 
+seeSprites :: Mac -> Eff ()
+seeSprites mac = do
+  let pi = PaletteIndex (eSized 6 1)
+  palette <- readPalette mac pi
+  sequence_
+    [ do
+        let xoff = 30
+        let yoff = 105
+        let i = 8*y + x
+        let xy = XY { x = nat8 (xoff + 20*x), y = nat9 (yoff + 20*y) }
+        sprite <- readSprite mac (SI (nat8 i))
+        drawSprite xy sprite palette
+    |
+      x <- [0..7]
+    , y <- [0..7]
+    ]
+
 setSquare :: Int -> XY (E Nat) -> RGB (E Nat) -> Eff ()
 setSquare width loc col = do
-  let dels = [ XY{x,y} | x <- map byte [0..width-1], y <- map byte [0..width-1] ]
+  let dels = [ XY{x,y} | x <- map nat8 [0..width-1], y <- map nat8 [0..width-1] ]
   sequence_ [do xy <- addXY loc offset; SetPixel xy col | offset <- dels]
 
 
@@ -90,15 +114,15 @@ setSquare width loc col = do
 seeScreen :: Mac -> Eff ()
 seeScreen _mac = do
   --drawTiles mac
-  --let _ = sequence_ [drawSprite i | i <- [0..7]]
-  let _ = undefined drawSprite
+  --let _ = sequence_ [drawSpriteIndex i | i <- [0..7]]
+  let _ = undefined drawSpriteIndex
   pure ()
 
-drawSprite :: Int -> Eff ()
-drawSprite i =
-  undefined i readPalette readSprite resolvePaletteItemIndex
+drawSpriteIndex :: Int -> Eff ()
+drawSpriteIndex i =
+  undefined i readPalette readSprite resolvePaletteItemIndex drawSprite
 
-{-drawSprite i = do
+{-drawSpriteIndex i = do
   xLoc <- ReadMem (0x5060 + 2 * fromIntegral i)
   yLoc <- ReadMem (0x5061 + 2 * fromIntegral i)
   info <- ReadMem (0x4ff0 + 2 * fromIntegral i)
@@ -110,13 +134,19 @@ drawSprite i =
   let y0 = fromIntegral (32*8 + 16 - yLoc)
   palette <- readPalette (makePI (fromIntegral palb))
   sprite <- readSprite (SI spriteIndex)
-  let (Sprite piis) = if xFlip||yFlip then sprite else sprite -- TODO flip!
-  let xys = [ XY (x+x0) (y+y0) | y <- [0..15] , x <- [0..15]]
-  sequence_ [ SetPixel xy rgb
-            | (xy,pii) <- zip xys piis
-            , let rgb = resolvePaletteItemIndex palette pii
-            ]
 -}
+
+drawSprite :: XY (E Nat) -> Sprite -> Palette -> Eff ()
+drawSprite xy sprite palette = do
+  let (Sprite piis) = sprite --if xFlip||yFlip then sprite else sprite -- TODO flip!
+  xys <- sequence [ addXY xy (XY { x = nat8 xd, y = nat8 yd })
+                  | yd <- [0..15] , xd <- [0..15]
+                  ]
+  sequence_ [ do
+                rgb <- resolvePaletteItemIndex palette pii
+                SetPixel xy rgb
+            | (xy,pii) <- zip xys piis
+            ]
 
 {-drawTiles :: Mac -> Eff ()
 drawTiles mac = do
@@ -155,13 +185,10 @@ drawTile mac xy i = do
   drawTile1 xy tile palette
 -}
 
-
 drawTile1 :: XY (E Nat) -> Tile -> Palette -> Eff ()
 drawTile1 xy tile palette = do
   let (Tile piis) = tile
-  xys <- sequence [ do
-                      let del = XY { x = byte xd, y = byte yd }
-                      addXY xy del
+  xys <- sequence [ addXY xy (XY { x = nat8 xd, y = nat8 yd })
                   | yd <- [0..7] , xd <- [0..7]
                   ]
   sequence_ [ do
@@ -176,30 +203,33 @@ addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
   y <- Plus y1 y2
   pure $ XY {x,y}
 
-newtype SpriteIndex = SI Int deriving (Num,Enum,Integral,Real,Ord,Eq) -- 0..63
+newtype SpriteIndex = SI (E Nat) -- 0..63
+data Sprite = Sprite [PaletteItemIndex] -- #256 (16x16) for each sprite pixel
 
-data Sprite = Sprite [PaletteItemIndex] -- #(16x16)
-
-readSprite :: SpriteIndex -> Eff Sprite
-readSprite (SI i) = do
-  undefined i Sprite
-{-readSprite (SI i) = do
-  let bytesPerSprite = 64
+readSprite :: Mac -> SpriteIndex -> Eff Sprite
+readSprite Mac{spriteRom} (SI i) = do
   let
+    readStrip :: Int -> Eff [PaletteItemIndex]
     readStrip off = do
-      byte <- ReadSpriteRom (bytesPerSprite*i + off)
-      pure $ decodeTileByte byte
+      i64 <- times64 i -- 64 bytes per sprite
+      a <- Plus i64 (eSized 6 off)
+      byte <- ReadRomByte spriteRom a
+      decodeTileByte byte
   layer1 <- mapM readStrip (reverse ([8..8+7] ++ [32+8+0..32+8+7]))
   layer2 <- mapM readStrip (reverse ([16..16+7] ++ [32+16+0..32+16+7]))
   layer3 <- mapM readStrip (reverse ([24..24+7] ++ [32+24+0..32+24+7]))
   layer4 <- mapM readStrip (reverse ([0..7] ++ [32+0..32+7]))
   let piis = concat [ concat (transpose layer) | layer <- [layer1,layer2,layer3,layer4] ]
-  pure $ Sprite piis-}
+  pure $ Sprite piis
+
+times64 :: E Nat -> Eff (E Nat)
+times64 i = do
+  xs <- Split i
+  Combine (xs ++ [b0,b0,b0,b0,b0,b0])
 
 
 newtype TileIndex = TI (E Nat) -- 0..255
-
-data Tile = Tile [PaletteItemIndex] -- #255 (8x8) for each pixel in the tile
+data Tile = Tile [PaletteItemIndex] -- #64 (8x8) for each tile pixel
 
 data PaletteItemIndex = PII { h :: E Bit, l :: E Bit }
 
@@ -233,7 +263,7 @@ readTile Mac{tileRom} (TI i) = do
 times16 :: E Nat -> Eff (E Nat)
 times16 i = do
   xs <- Split i
-  Combine (xs ++ [b0,b0,b0,b0]) where b0 = E_Lit 1 B0
+  Combine (xs ++ [b0,b0,b0,b0])
 
 decodeTileByte :: E Nat -> Eff [PaletteItemIndex] -- #4
 decodeTileByte w = do
@@ -270,7 +300,7 @@ readPalette mac@Mac{palRom} (PaletteIndex i) = do
 times4 :: E Nat -> Eff (E Nat)
 times4 i = do
   xs <- Split i
-  Combine (xs ++ [b0,b0]) where b0 = E_Lit 1 B0
+  Combine (xs ++ [b0,b0])
 
 newtype ColourIndex = CI (E Nat)
 
@@ -285,7 +315,7 @@ decodeAsRGB w = do
     bit :: Int -> Int -> Eff (E Nat)
     bit i v = do
       c <- w `index` i
-      muxBits c (byte v) (byte 0)
+      muxBits c (nat8 v) (nat8 0)
   r <- do
     x <- bit 0 0x21
     y <- bit 1 0x47
@@ -299,7 +329,7 @@ decodeAsRGB w = do
   b <- do
     x <- bit 6 0x51
     y <- bit 7 0xAE
-    let z = byte 0
+    let z = nat8 0
     add3 x y z
   pure RGB { r, g, b }
   where add3 a b c = do ab <- Plus a b; Plus ab c
@@ -351,8 +381,9 @@ andG = And
 ----------------------------------------------------------------------
 -- numbers
 
-byte :: Int -> E Nat
-byte = eSized 8
+nat8,nat9 :: Int -> E Nat
+nat8 = eSized 8
+nat9 = eSized 9
 
 eSized :: Size -> Int -> E Nat
 eSized size i = E_Nat (sizedNat size i)

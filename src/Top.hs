@@ -4,7 +4,7 @@ import Control.Monad (when)
 import System (System)
 import System.Environment (getArgs)
 import qualified EmulateWithSdl (main)
-import qualified PacGraphics (debug,screen)
+import qualified PacGraphics (tiles,sprites,screen)
 import qualified SmallExamples (combined)
 import qualified System (Conf(..),elaborate)
 
@@ -20,7 +20,7 @@ data Conf = Conf { example :: System, pic :: Bool , specializeRoms :: Bool }
 parseArgs :: [String] -> Mode
 parseArgs = do
   loop Conf
-    { example = PacGraphics.debug
+    { example = PacGraphics.sprites
     , pic = True
     , specializeRoms = False -- default slow
     }
@@ -32,6 +32,8 @@ parseArgs = do
       "slow":xs -> loop conf { specializeRoms = False } xs
       "quick":xs -> loop conf { specializeRoms = True } xs
       "combined":xs -> loop conf { example = SmallExamples.combined } xs
+      "tiles":xs -> loop conf { example = PacGraphics.tiles } xs
+      "sprites":xs -> loop conf { example = PacGraphics.sprites } xs
       "screen":xs -> loop conf { example = PacGraphics.screen } xs -- TODO
       xs -> error (show ("parseArgs",xs))
 
