@@ -22,7 +22,7 @@ parseArgs = do
   loop Conf
     { example = PacGraphics.debug
     , pic = True
-    , specializeRoms = True
+    , specializeRoms = False -- default slow
     }
   where
     loop :: Conf -> [String] -> Mode
@@ -30,6 +30,7 @@ parseArgs = do
       [] -> Mode conf
       "nopic":xs -> loop conf { pic = False } xs
       "slow":xs -> loop conf { specializeRoms = False } xs
+      "quick":xs -> loop conf { specializeRoms = True } xs
       "combined":xs -> loop conf { example = SmallExamples.combined } xs
       "screen":xs -> loop conf { example = PacGraphics.screen } xs -- TODO
       xs -> error (show ("parseArgs",xs))
@@ -44,6 +45,8 @@ run Conf{example,pic,specializeRoms} = do
 
 generateFile :: Show a => String -> a -> IO ()
 generateFile tag a = do
+  let str = show a
+  let nlines = length [ () | '\n' <- str ]
   let fp :: FilePath = "gen/" ++ tag ++ ".out"
-  putStrLn $ "Writing file: " <> fp
-  writeFile fp (show a)
+  putStrLn $ "Writing file: " <> fp <> " (" ++ show nlines ++ " lines)"
+  writeFile fp str

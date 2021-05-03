@@ -1,7 +1,7 @@
 module Value (
   XY(..), RGB(..), Key(..), Nat, Bit(..),
   Size(..),
-  checkSize, andBit, notBit, indexBits,
+  checkSize, isBit1, andBit, notBit, indexBits,
   sizedNat, nat2int, plusNat, sizeOfNat,
   ) where
 
@@ -22,6 +22,9 @@ instance Show Bit where show = \case B0 -> "0"; B1 -> "1"
 instance Show a => Show (XY a) where show XY{x,y} = show (x,y)
 instance Show a => Show (RGB a) where show RGB{r,g,b} = "RGB" ++ show (r,g,b)
 instance Show Size where show Size{size} = "#" ++ show size
+
+isBit1 :: Bit -> Bool
+isBit1 = \case B1 -> True; B0 -> False
 
 notBit :: Bit -> Bit
 notBit = \case B1 -> B0; B0 -> B1

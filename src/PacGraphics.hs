@@ -311,7 +311,9 @@ decodeAsRGB w = do
 -- class Muxable, or muxable for any functor?
 
 muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
-muxBits sel yes no = do
+muxBits = Mux
+_muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
+_muxBits sel yes no = do
   ys <- Split yes
   ns <- Split no
   sequence [ mux sel y n | (y,n) <- zipChecked ys ns ] >>= Combine

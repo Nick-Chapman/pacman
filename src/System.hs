@@ -31,6 +31,7 @@ data Eff a where
   SetReg :: Show a => Reg a -> E a -> Eff ()
   And :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
+  Mux :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
   Split :: E [Bit] -> Eff [E Bit]
   Combine :: [E Bit] -> Eff (E [Bit])
@@ -113,6 +114,16 @@ compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
           Nothing -> do
             let size = max (sizeE e1) (sizeE e2)
             let oper = O_Plus e1 e2
+            shareV s size oper $ \s tmp ->
+              k s (E_Tmp tmp)
+
+      Mux sel yes no -> do
+        case sel of
+          E_Lit _ B1 -> k s yes
+          E_Lit _ B0 -> k s no
+          _ -> do
+            let size = max (sizeE yes) (sizeE no)
+            let oper = O_Mux sel yes no
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
 
