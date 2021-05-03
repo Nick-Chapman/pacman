@@ -112,8 +112,8 @@ setSquare width loc col = do
 -- TODO: The screen with correctly layed out tiles + sprites
 
 seeScreen :: Mac -> Eff ()
-seeScreen _mac = do
-  --drawTiles mac
+seeScreen mac = do
+  drawTiles mac
   --let _ = sequence_ [drawSpriteIndex i | i <- [0..7]]
   let _ = undefined drawSpriteIndex
   pure ()
@@ -148,11 +148,8 @@ drawSprite xy sprite palette = do
             | (xy,pii) <- zip xys piis
             ]
 
-{-drawTiles :: Mac -> Eff ()
+drawTiles :: Mac -> Eff ()
 drawTiles mac = do
-  undefined (drawTile mac)-}
-
-{-do
   let
     width = 28
     height = 32 -- of mid-screen area
@@ -167,24 +164,23 @@ drawTiles mac = do
       [ (XY{x = 8*(width-1-i), y = 8*34}, 0x02 + i) | i <- [0..width-1] ] ++
       [ (XY{x = 8*(width-1-i), y = 8*35}, 0x22 + i) | i <- [0..width-1] ]
   sequence_
-    [ drawTile xy i | (xy,i) <- top ++ mid ++ bot ]
--}
+    [ drawTile mac xy i | (xy,i::Int) <- top ++ mid ++ bot ]
 
 
-{-
 baseVideoRam :: Int
 baseVideoRam = 0x4000
 
-drawTile :: Mac -> XY (E Nat) -> Int -> Eff ()
+-- draw a tile selected by the vram
+drawTile :: Mac -> XY Int -> Int -> Eff ()
 drawTile mac xy i = do
-  byteT <- ReadMem (ePos (baseVideoRam + fromIntegral i))
+  byteT <- ReadMem (eSized 16 (baseVideoRam + fromIntegral i))
   tile <- readTile mac (TI byteT)
-  byteP <- ReadMem (ePos (baseVideoRam + 0x400 + fromIntegral i))
-  pi <- makePaletteIndex byteP
+  byteP <- ReadMem (eSized 16 (baseVideoRam + 0x400 + fromIntegral i))
+  let pi = PaletteIndex byteP
   palette <- readPalette mac pi
-  drawTile1 xy tile palette
--}
+  drawTile1 (fmap nat9 xy) tile palette
 
+-- draw a tile selected by index
 drawTile1 :: XY (E Nat) -> Tile -> Palette -> Eff ()
 drawTile1 xy tile palette = do
   let (Tile piis) = tile

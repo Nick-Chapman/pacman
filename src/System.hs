@@ -86,7 +86,8 @@ compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
     comp :: CS -> Eff a -> (CS -> a -> Prog) -> Prog
     comp s eff k = case eff of
 
-      ReadMem{} -> undefined
+      --ReadMem{} -> undefined
+      ReadMem{} -> k s (E_Nat (sizedNat 8 1)) -- TODO: hack
 
       Ret a -> k s a
       Bind e f -> comp s e $ \s a -> comp s (f a) k
