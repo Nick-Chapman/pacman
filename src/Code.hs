@@ -1,6 +1,6 @@
 module Code (
   Code(..), Prog(..), Step(..), E(..), Oper(..), eNot,
-  RegId, Reg(..), Tmp(..), TmpId(..), RomId, RomSpec(..),
+  RegId, Reg(..), Tmp(..), TmpId(..), RomId, RomSpec(..), RamId,
   pretty,
   loadRoms, readRom,
   init, Context, State, runForOneFrame, Keys(..), Picture(..),
@@ -10,15 +10,18 @@ import Data.Map (Map)
 import Data.Set (Set)
 import Prelude hiding (init)
 import Rom (Rom)
+import Ram (Ram)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Rom (load,lookup)
+import qualified Ram (init,read,write)
 
 import Value
 
 -- full generated code. includes decs & prog
 data Code = Code
   { regDecs :: [(RegId,Size)]
+  , ramDecs :: [(RamId,Size)]
   , romSpecs :: [(RomId,RomSpec)]
   , entry :: Prog
   }
@@ -32,6 +35,7 @@ data Prog where
 -- basic program step (statement), which is sequenced in a program
 data Step where
   S_Let :: Show a => Tmp a -> Oper a -> Step
+  S_WriteRam :: RamId -> E Nat -> E Nat -> Step
   S_SetReg :: Show a => Reg a -> E a -> Step
   S_SetPixel :: XY (E Nat) -> RGB (E Nat) -> Step
 
@@ -43,6 +47,7 @@ data Oper a where
   O_Plus :: E Nat -> E Nat -> Oper Nat
   O_Mux :: E Bit -> E [Bit] -> E [Bit] -> Oper [Bit]
   O_ReadRomByte :: RomId -> E Nat -> Oper Nat
+  O_ReadRam :: RamId -> E Nat -> Oper Nat
 
 -- program expressions; atomic/pure, so can be freely shared
 -- knows it's size
@@ -78,6 +83,7 @@ data RomSpec = RomSpec { path :: String, size :: Int }
 newtype RegId = RegId { u :: Int } deriving (Eq,Ord,Num)
 newtype TmpId = TmpId { u :: Int } deriving (Eq,Ord)
 newtype RomId = RomId { u :: Int } deriving (Eq,Ord,Num)
+newtype RamId = RamId { u :: Int } deriving (Eq,Ord,Num)
 
 data Context = Context
   { roms :: Map RomId Rom
@@ -86,7 +92,7 @@ data Context = Context
 -- everything which can form a saved-state
 data State = State
   { regs :: Map RegId [Bit]
-  -- TODO: rams will go here
+  , rams :: Map RamId Ram
   }
 
 newtype Keys = Keys { pressed :: Set Key }
@@ -96,11 +102,11 @@ data Picture where
   Pictures :: [Picture] -> Picture
 
 init :: Code -> IO (Context,State,Prog) -- IO to load roms from file
-init Code{entry=prog,regDecs,romSpecs} = do
-  -- TODO: create ram from ram-spec
+init Code{entry=prog,regDecs,romSpecs,ramDecs} = do
   let regs = Map.fromList [ (r,zeroOf size) | (r,Size {size}) <- regDecs ]
+  let rams = Map.fromList [ (id,ram) | (id,Size n) <- ramDecs, let ram = Ram.init n ]
   roms <- loadRoms romSpecs
-  pure $ (Context {roms},State {regs},prog)
+  pure $ (Context {roms},State {regs,rams},prog)
     where
       zeroOf :: Int -> [Bit]
       zeroOf size = take size (repeat B0)
@@ -145,6 +151,8 @@ evalStep :: RS -> Step -> RS
 evalStep rs@RS{screen,state,tmps} = \case
   S_Let tmp oper -> do
     rs { tmps = bindTmp tmps (evalOper rs oper) tmp }
+  S_WriteRam id a b ->
+    rs { state = updateRam state id (evalE rs a) (evalE rs b) }
   S_SetReg reg e ->
     rs { state = updateReg state (evalE rs e) reg }
   S_SetPixel xy rgb -> do
@@ -170,7 +178,7 @@ updateReg s@State{regs} val = \case
     s { regs = update regs id (checkSize size val) }
 
 evalOper :: RS -> Oper a -> a
-evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
+evalOper rs@RS{context=Context{roms},state=State{regs,rams}} = \case
   O_And e1 e2 -> andBit (evalE rs e1) (evalE rs e2)
   O_Plus e1 e2 -> plusNat (evalE rs e1) (evalE rs e2)
   O_Mux sel yes no ->
@@ -183,6 +191,19 @@ evalOper rs@RS{context=Context{roms},state=State{regs}} = \case
       bits -> error (show ("evalE/Reg1",id,length bits))
   O_ReadRomByte romId a ->
     readRom (look roms romId) (evalE rs a)
+  O_ReadRam ramId a ->
+    readRam (look rams ramId) (evalE rs a)
+
+
+updateRam :: State -> RamId -> Nat -> Nat -> State
+updateRam state@State{rams} id a b = do
+  let ram = look rams id
+  let ram' = Ram.write ram (nat2int a) (fromIntegral (nat2int b))
+  state { rams = update rams id ram' }
+
+readRam :: Ram -> Nat -> Nat
+readRam ram a =
+  sizedNat (Size 8) (fromIntegral (Ram.read ram (nat2int a)))
 
 readRom :: Rom -> Nat -> Nat
 readRom rom a = do
@@ -240,9 +261,10 @@ class Pretty a where
   lay :: a -> [String]
 
 instance Pretty Code where
-  lay Code{regDecs,romSpecs,entry} =
-    [ "reg " ++ show id ++ " : " ++ show size | (id,size) <- regDecs ] ++
+  lay Code{romSpecs,regDecs,ramDecs,entry} =
     [ "rom " ++ show id ++ " : " ++ show spec | (id,spec) <- romSpecs ] ++
+    [ "reg " ++ show id ++ " : " ++ show size | (id,size) <- regDecs ] ++
+    [ "ram " ++ show id ++ " : " ++ show size | (id,size) <- ramDecs ] ++
     lay entry
 
 instance Pretty Prog where
@@ -266,6 +288,7 @@ instance Show Step where
   show = \case
     S_Let tmp oper ->
       "let " ++ show tmp ++ " : " ++ show (sizeOfTmp tmp) ++ " = " ++ show oper
+    S_WriteRam id a b -> show id ++ "[" ++ show a ++ "] := " ++ show b
     S_SetReg reg exp -> show reg ++ " := " ++ show exp
     S_SetPixel xy rgb -> "set-pixel " ++ show xy ++ " := " ++ show rgb
 
@@ -282,6 +305,7 @@ instance Show a => Show (Oper a) where
     O_Reg (Reg _size id) -> show id
     O_Reg (Reg1 id) -> show id
     O_ReadRomByte romId a -> show romId ++ "[" ++ show a ++ "]"
+    O_ReadRam ramId a -> show ramId ++ "[" ++ show a ++ "]"
 
 instance Show a => Show (E a) where
   show = \case
@@ -308,3 +332,4 @@ deriving instance Show RomSpec
 instance Show RegId where show RegId{u} = "r"++show u
 instance Show TmpId where show TmpId{u} = "u"++show u
 instance Show RomId where show RomId{u} = "rom"++show u
+instance Show RamId where show RamId{u} = "ram"++show u

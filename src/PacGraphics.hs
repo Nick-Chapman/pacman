@@ -6,37 +6,53 @@ import System
 import Value
 
 tiles :: System
-tiles = withRoms $ \mac -> do
+tiles = withMac $ \mac -> do
   FrameEffect $ do
     seeCols mac
     seePals mac
     seeTiles mac
 
 sprites :: System
-sprites = withRoms $ \mac -> do
+sprites = withMac $ \mac -> do
   FrameEffect $ do
     seeCols mac
     seePals mac
     seeSprites mac
 
 screen :: System
-screen = withRoms $ \mac -> do
+screen = withMac $ \mac -> do
+  DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
   FrameEffect $ do
-    seeScreen mac -- TODO: goal!
+    loadDump dump mac
+    drawTiles mac
+    let _ = sequence_ [drawSpriteIndex i | i <- [0..7]]
+    pure ()
 
-withRoms :: (Mac -> System) -> System
-withRoms f =
+loadDump :: RomId -> Mac -> Eff ()
+loadDump dump Mac{ram} = do
+  sequence_ [ do
+                b <- ReadRomByte dump (eSized 11 i)
+                WriteRam ram (eSized 16 (baseVideoRam + i)) b
+            |
+              i <- [0..2047]
+            ]
+
+withMac :: (Mac -> System) -> System
+withMac f =
   DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
   DeclareRom (RomSpec { path = "roms/82s126.4a", size = 256 }) $ \palRom -> do
   DeclareRom (RomSpec { path = "roms/pacman.5e", size = 4096 }) $ \tileRom -> do
   DeclareRom (RomSpec { path = "roms/pacman.5f", size = 4096 }) $ \spriteRom -> do
-  f (Mac { colRom, palRom, tileRom, spriteRom })
+  -- TODO: install roms/rams in a memory-map; for now hack it!
+  DeclareRam 0x4800 $ \ram -> do
+  f (Mac { colRom, palRom, tileRom, spriteRom, ram })
 
 data Mac = Mac
   { colRom :: RomId
   , palRom :: RomId
   , tileRom :: RomId
   , spriteRom :: RomId
+  , ram :: RamId
   }
 
 ----------------------------------------------------------------------
@@ -111,13 +127,6 @@ setSquare width loc col = do
 ----------------------------------------------------------------------
 -- TODO: The screen with correctly layed out tiles + sprites
 
-seeScreen :: Mac -> Eff ()
-seeScreen mac = do
-  drawTiles mac
-  --let _ = sequence_ [drawSpriteIndex i | i <- [0..7]]
-  let _ = undefined drawSpriteIndex
-  pure ()
-
 drawSpriteIndex :: Int -> Eff ()
 drawSpriteIndex i =
   undefined i readPalette readSprite resolvePaletteItemIndex drawSprite
@@ -172,13 +181,20 @@ baseVideoRam = 0x4000
 
 -- draw a tile selected by the vram
 drawTile :: Mac -> XY Int -> Int -> Eff ()
-drawTile mac xy i = do
-  byteT <- ReadMem (eSized 16 (baseVideoRam + fromIntegral i))
+drawTile mac@Mac{ram} xy i = do
+  byteT <- ReadRam ram (eSized 16 (baseVideoRam + fromIntegral i))
   tile <- readTile mac (TI byteT)
-  byteP <- ReadMem (eSized 16 (baseVideoRam + 0x400 + fromIntegral i))
-  let pi = PaletteIndex byteP
+  byteP <- ReadRam ram (eSized 16 (baseVideoRam + 0x400 + fromIntegral i))
+  six <- mod64 byteP
+  let pi = PaletteIndex six
   palette <- readPalette mac pi
   drawTile1 (fmap nat9 xy) tile palette
+
+mod64 :: E Nat -> Eff (E Nat)
+mod64 i = do
+  xs <- Split i
+  let xs' = drop 2 xs
+  Combine xs'
 
 -- draw a tile selected by index
 drawTile1 :: XY (E Nat) -> Tile -> Palette -> Eff ()

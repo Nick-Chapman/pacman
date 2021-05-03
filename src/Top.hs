@@ -20,7 +20,7 @@ data Conf = Conf { example :: System, pic :: Bool , specializeRoms :: Bool }
 parseArgs :: [String] -> Mode
 parseArgs = do
   loop Conf
-    { example = PacGraphics.sprites
+    { example = PacGraphics.screen
     , pic = True
     , specializeRoms = False -- default slow
     }
@@ -34,7 +34,6 @@ parseArgs = do
       "combined":xs -> loop conf { example = SmallExamples.combined } xs
       "tiles":xs -> loop conf { example = PacGraphics.tiles } xs
       "sprites":xs -> loop conf { example = PacGraphics.sprites } xs
-      "screen":xs -> loop conf { example = PacGraphics.screen } xs -- TODO
       xs -> error (show ("parseArgs",xs))
 
 run :: Conf -> IO ()

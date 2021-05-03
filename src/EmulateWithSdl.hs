@@ -34,14 +34,14 @@ main code = do
   let
     loop :: World -> IO ()
     loop World{state,keys,frame} = do
-      --putStrLn $ "frame: " ++ show frame
+      putStrLn $ "frame: " ++ show frame
       (picture,state) <- Code.runForOneFrame prog context state keys
       drawEverything assets picture
       events <- SDL.pollEvents
       let interesting = [ i | e <- events, i <- interestingOf e ]
       if Quit `elem` interesting then pure () else do --quit
       keys <- pure $ foldl insertInteresting keys interesting
-      threadDelay (1000000 `div` 60) -- 1/60 sec
+      let _ = threadDelay (1000000 `div` 60) -- 1/60 sec
       loop World { state, keys, frame = frame+1 }
 
   loop world0

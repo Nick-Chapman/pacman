@@ -1,5 +1,5 @@
 module System(
-  System(..), Eff(..), index, E(..), eNot, Reg, RomId, RomSpec(..),
+  System(..), Eff(..), index, E(..), eNot, Reg, RomId, RomSpec(..), RamId,
   Conf(..),elaborate,
   ) where
 
@@ -20,6 +20,7 @@ data System
   | DeclareRom RomSpec (RomId -> System)
   | DeclareReg1 (Reg Bit -> System)
   | DeclareReg Size (Reg [Bit] -> System)
+  | DeclareRam Size (RamId -> System)
 
 -- the core effect type
 data Eff a where
@@ -33,10 +34,10 @@ data Eff a where
   Plus :: E Nat -> E Nat -> Eff (E Nat)
   Mux :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
+  ReadRam :: RamId -> E Nat -> Eff (E Nat)
+  WriteRam :: RamId -> E Nat -> E Nat -> Eff ()
   Split :: E [Bit] -> Eff [E Bit]
   Combine :: [E Bit] -> Eff (E [Bit])
-
-  ReadMem :: E Nat -> Eff (E Nat)
 
 index :: E [Bit] -> Int -> Eff (E Bit)
 index e i = do
@@ -45,13 +46,15 @@ index e i = do
 
 data ES = ES -- elaboration state
   { regId :: RegId
+  , ramId :: RamId
   , regs :: [(RegId,Size)]
   , romId :: RomId
   , romSpecs :: [(RomId,RomSpec)]
+  , ramDecs :: [(RamId,Size)]
   }
 
 es0 :: ES
-es0 = ES { regId = 0, regs = [], romId = 101, romSpecs = [] }
+es0 = ES { regId = 0, ramId = 1, regs = [], romId = 101, romSpecs = [], ramDecs = [] }
 
 data Conf = Conf { specializeRoms :: Bool }
 
@@ -59,7 +62,7 @@ elaborate :: Conf -> System -> IO Code
 elaborate Conf{specializeRoms} = loop es0
   where
     loop :: ES -> System -> IO Code
-    loop es@ES{regId,regs,romId,romSpecs} = \case
+    loop es@ES{regId,ramId,regs,romId,romSpecs,ramDecs} = \case
       DeclareRom spec f -> do
         loop es { romId = romId + 1, romSpecs = (romId,spec) : romSpecs } (f romId)
       DeclareReg size f -> do
@@ -69,10 +72,12 @@ elaborate Conf{specializeRoms} = loop es0
         let size = Size { size = 1 }
         let reg = Reg1 regId
         loop es { regId = regId + 1, regs = (regId,size) : regs } (f reg)
+      DeclareRam size f -> do
+        loop es { ramId = ramId + 1, ramDecs = (ramId,size) : ramDecs } (f ramId)
       FrameEffect eff -> do
         roms <- if specializeRoms then loadRoms romSpecs else pure Map.empty
         let prog = compile0 roms eff
-        pure $ Code { romSpecs, regDecs = regs, entry = prog }
+        pure $ Code { romSpecs, ramDecs, regDecs = regs, entry = prog }
 
 data CS = CS
   { u :: Int
@@ -85,9 +90,6 @@ compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
   where
     comp :: CS -> Eff a -> (CS -> a -> Prog) -> Prog
     comp s eff k = case eff of
-
-      --ReadMem{} -> undefined
-      ReadMem{} -> k s (E_Nat (sizedNat 8 1)) -- TODO: hack
 
       Ret a -> k s a
       Bind e f -> comp s e $ \s a -> comp s (f a) k
@@ -142,6 +144,13 @@ compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
           _ -> do
             shareV s (Size 8) (O_ReadRomByte rid a) $ \s tmp -> do
               k s (E_Tmp tmp)
+
+      ReadRam id a -> do
+        shareV s (Size 8) (O_ReadRam id a) $ \s tmp -> do
+          k s (E_Tmp tmp)
+
+      WriteRam id a b -> do
+        P_Seq (S_WriteRam id a b) (k s ())
 
       Split e -> do
         case e of
