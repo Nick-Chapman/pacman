@@ -1,19 +1,23 @@
-module SmallExamples (combined) where
+module SmallExamples (square,cols) where
 
 import System
 import Value
 
-combined :: System
-combined = do
+cols :: System
+cols = do
+  DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
+  FrameEffect $ do
+    showCols 10 16 colRom
+    pure ()
+
+square :: System
+square = do
   DeclareReg1 $ \enterLastReg -> do
   DeclareReg1 $ \highReg -> do
   DeclareReg Size {size = 7} $ \xposReg -> do
   let ms = MS {enterLastReg,highReg,xposReg}
-  DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
   FrameEffect $ do
-    showCols 5 16 colRom
-    movingSquare 5 ms
-    pure ()
+    moveSquare 5 ms
 
 showCols :: Int -> Int -> RomId -> Eff ()
 showCols w n colRom = sequence_ [colSquare w colRom i | i <- [0..n-1]]
@@ -30,9 +34,9 @@ decodeAsRGB :: E Nat -> Eff (RGB (E Nat))
 decodeAsRGB w = do
   let
     bit :: Int -> Int -> Eff (E Nat)
-    bit i v = do
-      c <- w `index` i
-      muxBits c (nat8 v) (nat8 0)
+    bit i v =
+      --switch (w `index` i) (nat8 v) (nat8 0)
+      _muxBits (w `index` i) (nat8 v) (nat8 0)
   r <- do
     x <- bit 0 0x21
     y <- bit 1 0x47
@@ -58,8 +62,8 @@ data MS = MS
   , highReg :: Reg Bit
   }
 
-movingSquare :: Int -> MS -> Eff ()
-movingSquare w MS{xposReg,enterLastReg,highReg}= do
+moveSquare :: Int -> MS -> Eff ()
+moveSquare w MS{xposReg,enterLastReg,highReg}= do
 
     let goingRight = E_KeyDown KeyX
     let shift = E_KeyDown KeyShift -- colour
@@ -86,10 +90,38 @@ movingSquare w MS{xposReg,enterLastReg,highReg}= do
     nextHigh <- mux switchHeight highBar high
     SetReg highReg nextHigh
 
-    loc <- switch high here there
-    col <- switch shift green red
+    loc <- switchXY high here there
+    col <- switchRGB shift green red
 
     setSquare w loc col
+
+
+switchXY :: E Bit -> XY (E Nat) -> XY (E Nat) -> Eff (XY (E Nat))
+switchXY sel XY{x=x1,y=y1} XY{x=x2,y=y2} = do
+  x <- switch sel x1 x2
+  y <- switch sel y1 y2
+  pure XY{x,y}
+
+switchRGB :: E Bit -> RGB (E Nat) -> RGB (E Nat) -> Eff (RGB (E Nat))
+switchRGB sel RGB{r=r1,g=g1,b=b1} RGB{r=r2,g=g2,b=b2} = do
+  r <- switch sel r1 r2
+  g <- switch sel g1 g2
+  b <- switch sel b1 b2
+  pure RGB{r,g,b}
+
+{-
+-- | very generic on switched type; causes code explosion
+_switch :: E Bit -> a -> a -> Eff a
+_switch sel yes no = do
+  CaseBit sel >>= \case
+    B1 -> pure yes
+    B0 -> pure no
+-}
+
+-- | type is less general, fixed to 'E [Bit]'. Could it be 'E a' ?
+switch :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
+switch sel yes no = do
+  Mux sel yes no
 
 setSquare :: Int -> XY (E Nat) -> RGB (E Nat) -> Eff ()
 setSquare width loc col = do
@@ -102,11 +134,9 @@ addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
   y <- Plus y1 y2
   pure $ XY {x,y}
 
-muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
-muxBits sel yes no = do
-  ys <- Split yes
-  ns <- Split no
-  sequence [ mux sel y n | (y,n) <- zipChecked ys ns ] >>= Combine
+_muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit]) -- muxes individual bits
+_muxBits sel yes no = do
+  combine <$> sequence [ mux sel y n | (y,n) <- zipChecked (split yes) (split no) ]
 
 zipChecked :: [a] -> [b] -> [(a,b)]
 zipChecked xs ys = do
@@ -115,12 +145,6 @@ zipChecked xs ys = do
   if xn /= yn then error (show ("zipChecked",xn,yn)) else
     zip xs ys
 
--- | generic on switched type; cause code explosion
-switch :: E Bit -> a -> a -> Eff a
-switch sel yes no = do
-  CaseBit sel >>= \case
-    B1 -> pure yes
-    B0 -> pure no
 
 -- | switched type must be E Bit
 mux :: E Bit -> E Bit -> E Bit -> Eff (E Bit)

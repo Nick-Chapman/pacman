@@ -5,8 +5,9 @@ import System (System)
 import System.Environment (getArgs)
 import qualified EmulateWithSdl (main)
 import qualified PacGraphics (tiles,sprites,screen)
-import qualified SmallExamples (combined)
+import qualified SmallExamples (square,cols)
 import qualified System (Conf(..),elaborate)
+import qualified PacVideo_Vhdl (theVideoSystem)
 
 main :: IO ()
 main = do
@@ -20,7 +21,7 @@ data Conf = Conf { example :: System, pic :: Bool , specializeRoms :: Bool }
 parseArgs :: [String] -> Mode
 parseArgs = do
   loop Conf
-    { example = PacGraphics.screen
+    { example = SmallExamples.cols
     , pic = True
     , specializeRoms = False -- default slow
     }
@@ -31,9 +32,12 @@ parseArgs = do
       "nopic":xs -> loop conf { pic = False } xs
       "slow":xs -> loop conf { specializeRoms = False } xs
       "quick":xs -> loop conf { specializeRoms = True } xs
-      "combined":xs -> loop conf { example = SmallExamples.combined } xs
+      "cols":xs -> loop conf { example = SmallExamples.cols } xs
+      "square":xs -> loop conf { example = SmallExamples.square } xs
       "tiles":xs -> loop conf { example = PacGraphics.tiles } xs
       "sprites":xs -> loop conf { example = PacGraphics.sprites } xs
+      "screen":xs -> loop conf { example = PacGraphics.screen } xs
+      "vhdl":xs -> loop conf { example = PacVideo_Vhdl.theVideoSystem } xs
       xs -> error (show ("parseArgs",xs))
 
 run :: Conf -> IO ()

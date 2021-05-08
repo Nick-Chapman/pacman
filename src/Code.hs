@@ -46,7 +46,7 @@ data Oper a where
   O_Reg :: Reg a -> Oper a
   O_And :: E Bit -> E Bit -> Oper Bit
   O_Plus :: E Nat -> E Nat -> Oper Nat
-  O_Mux :: E Bit -> E [Bit] -> E [Bit] -> Oper [Bit]
+  O_Mux :: E Bit -> E a -> E a -> Oper a
   O_ReadRomByte :: RomId -> E Nat -> Oper Nat
   O_ReadRam :: RamId -> E Nat -> Oper Nat
 

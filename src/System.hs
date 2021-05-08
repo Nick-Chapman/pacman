@@ -1,6 +1,9 @@
 module System(
-  System(..), Eff(..), index, E(..), eNot, Reg, RomId, RomSpec(..), RamId,
+  System(..), Eff(..), Reg, RomId, RomSpec(..), RamId,
   Conf(..),elaborate,
+  -- effect-free combinators
+  E(..), -- TODO: avoid exposing constructors
+  eNot, combine, split, index,
   ) where
 
 import Control.Monad (ap,liftM)
@@ -36,13 +39,6 @@ data Eff a where
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
   ReadRam :: RamId -> E Nat -> Eff (E Nat)
   WriteRam :: RamId -> E Nat -> E Nat -> Eff ()
-  Split :: E [Bit] -> Eff [E Bit]
-  Combine :: [E Bit] -> Eff (E [Bit])
-
-index :: E [Bit] -> Int -> Eff (E Bit)
-index e i = do
-  bits <- Split e
-  pure $ indexBits bits i
 
 data ES = ES -- elaboration state
   { regId :: RegId
@@ -97,7 +93,7 @@ compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
       SetPixel xy rgb -> P_Seq (S_SetPixel xy rgb) (k s ())
       SetReg reg exp -> P_Seq (S_SetReg reg exp) (k s ())
 
-      CaseBit bit -> do
+      CaseBit bit -> do -- DONT USE ME, I BLOW UP
         case bit of
           E_Lit _ B1 -> k s B1
           E_Lit _ B0 -> k s B0
@@ -152,25 +148,6 @@ compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
       WriteRam id a b -> do
         P_Seq (S_WriteRam id a b) (k s ())
 
-      Split e -> do
-        case e of
-          E_Nat xs -> k s (map (E_Lit 1) xs)
-          E_Lit _ xs -> k s (map (E_Lit 1) xs)
-          E_Combine xs -> k s xs
-          E_Tmp tmp -> do
-            let Size n = sizeE e
-            k s [E_TmpIndexed tmp i | i <- reverse [0..n-1]]
-
-      Combine es -> do
-        case tryLiteralizeBits es of
-          Just xs -> k s (E_Nat xs)
-          Nothing ->
-            k s (E_Combine es)
-
-tryLiteralizeBits :: [E Bit] -> Maybe [Bit]
-tryLiteralizeBits es = do
-  let bs = [ b | e <- es, E_Lit _ b <- [e] ]
-  if length bs == length es then Just bs else Nothing
 
 share1 :: CS -> Oper Bit -> (CS -> Tmp Bit -> Prog) -> Prog
 share1 s@CS{u} oper k = do
@@ -208,3 +185,30 @@ sizeE = \case
   E_Tmp (Tmp1 _) -> Size 1
   E_TmpIndexed _ _ -> Size 1
   E_Combine xs -> Size (length xs)
+
+----------------------------------------------------------------------
+-- operators without effects:
+--   easier to compose for caller; make it clear that no Ops are generated
+
+combine :: [E Bit] -> E [Bit]
+combine es =
+  case tryLiteralizeBits es of
+    Just xs -> E_Nat xs
+    Nothing -> E_Combine es
+
+tryLiteralizeBits :: [E Bit] -> Maybe [Bit]
+tryLiteralizeBits es = do
+  let bs = [ b | e <- es, E_Lit _ b <- [e] ]
+  if length bs == length es then Just bs else Nothing
+
+split :: E [Bit] -> [E Bit]
+split = \case
+  E_Nat xs -> map (E_Lit 1) xs
+  E_Lit _ xs -> map (E_Lit 1) xs
+  E_Combine xs -> xs
+  e@(E_Tmp tmp) -> do
+    let Size n = sizeE e
+    [E_TmpIndexed tmp i | i <- reverse [0..n-1]]
+
+index :: E [Bit] -> Int -> E Bit
+index e i = reverse (split e) !! i

@@ -25,7 +25,7 @@ screen = withMac $ \mac -> do
   FrameEffect $ do
     loadDump dump mac
     drawTiles mac
-    let _ = sequence_ [drawSpriteIndex i | i <- [0..7]]
+    let _ = sequence_ [drawSpriteIndex i | i <- [0..7]] -- TODO
     pure ()
 
 loadDump :: RomId -> Mac -> Eff ()
@@ -185,16 +185,13 @@ drawTile mac@Mac{ram} xy i = do
   byteT <- ReadRam ram (eSized 16 (baseVideoRam + fromIntegral i))
   tile <- readTile mac (TI byteT)
   byteP <- ReadRam ram (eSized 16 (baseVideoRam + 0x400 + fromIntegral i))
-  six <- mod64 byteP
+  let six = mod64 byteP
   let pi = PaletteIndex six
   palette <- readPalette mac pi
   drawTile1 (fmap nat9 xy) tile palette
 
-mod64 :: E Nat -> Eff (E Nat)
-mod64 i = do
-  xs <- Split i
-  let xs' = drop 2 xs
-  Combine xs'
+mod64 :: E Nat -> E Nat
+mod64 i = combine (reverse (take 6 (reverse (split i))))
 
 -- draw a tile selected by index
 drawTile1 :: XY (E Nat) -> Tile -> Palette -> Eff ()
@@ -223,10 +220,10 @@ readSprite Mac{spriteRom} (SI i) = do
   let
     readStrip :: Int -> Eff [PaletteItemIndex]
     readStrip off = do
-      i64 <- times64 i -- 64 bytes per sprite
+      let i64 = times64 i -- 64 bytes per sprite
       a <- Plus i64 (eSized 6 off)
       byte <- ReadRomByte spriteRom a
-      decodeTileByte byte
+      pure $ decodeTileByte byte
   layer1 <- mapM readStrip (reverse ([8..8+7] ++ [32+8+0..32+8+7]))
   layer2 <- mapM readStrip (reverse ([16..16+7] ++ [32+16+0..32+16+7]))
   layer3 <- mapM readStrip (reverse ([24..24+7] ++ [32+24+0..32+24+7]))
@@ -234,11 +231,8 @@ readSprite Mac{spriteRom} (SI i) = do
   let piis = concat [ concat (transpose layer) | layer <- [layer1,layer2,layer3,layer4] ]
   pure $ Sprite piis
 
-times64 :: E Nat -> Eff (E Nat)
-times64 i = do
-  xs <- Split i
-  Combine (xs ++ [b0,b0,b0,b0,b0,b0])
-
+times64 :: E Nat -> E Nat
+times64 i = combine (split i ++ [b0,b0,b0,b0,b0,b0])
 
 newtype TileIndex = TI (E Nat) -- 0..255
 data Tile = Tile [PaletteItemIndex] -- #64 (8x8) for each tile pixel
@@ -263,24 +257,22 @@ readTile :: Mac -> TileIndex -> Eff Tile
 readTile Mac{tileRom} (TI i) = do
   let
     readStrip off = do
-      i16 <- times16 i -- 16 bytes per tile
+      let i16 = times16 i -- 16 bytes per tile
       a <- Plus i16 (eSized 4 off)
       byte <- ReadRomByte tileRom a
-      decodeTileByte byte
+      pure $ decodeTileByte byte
   bot <- mapM readStrip (reverse [0..7])
   top <- mapM readStrip (reverse [8..15])
   let piis = concat (transpose top) ++ concat (transpose bot)
   pure $ Tile piis
 
-times16 :: E Nat -> Eff (E Nat)
-times16 i = do
-  xs <- Split i
-  Combine (xs ++ [b0,b0,b0,b0])
+times16 :: E Nat -> E Nat
+times16 i = combine (split i ++ [b0,b0,b0,b0])
 
-decodeTileByte :: E Nat -> Eff [PaletteItemIndex] -- #4
+decodeTileByte :: E Nat -> [PaletteItemIndex] -- #4
 decodeTileByte w = do
-  Split w >>= \case
-    [a,b,c,d,e,f,g,h] -> pure [ PII a e , PII b f , PII c g , PII d h ]
+  case split w of
+    [a,b,c,d,e,f,g,h] -> [ PII a e , PII b f , PII c g , PII d h ]
     _ ->
       error "decodeTileByte, expected 8 bits"
 
@@ -303,16 +295,14 @@ readPalette mac@Mac{palRom} (PaletteIndex i) = do
   where
     readItem :: Int -> Eff (RGB (E Nat))
     readItem off = do
-      i4 <- times4 i
+      let i4 = times4 i
       a <- Plus i4 (eSized 2 off)
       byte <- ReadRomByte palRom a
       let ci = CI byte
       readColour mac ci
 
-times4 :: E Nat -> Eff (E Nat)
-times4 i = do
-  xs <- Split i
-  Combine (xs ++ [b0,b0])
+times4 :: E Nat -> E Nat
+times4 i = do combine (split i ++ [b0,b0])
 
 newtype ColourIndex = CI (E Nat)
 
@@ -326,7 +316,7 @@ decodeAsRGB w = do
   let
     bit :: Int -> Int -> Eff (E Nat)
     bit i v = do
-      c <- w `index` i
+      let c = w `index` i
       muxBits c (nat8 v) (nat8 0)
   r <- do
     x <- bit 0 0x21
@@ -356,9 +346,9 @@ muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
 muxBits = Mux
 _muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
 _muxBits sel yes no = do
-  ys <- Split yes
-  ns <- Split no
-  sequence [ mux sel y n | (y,n) <- zipChecked ys ns ] >>= Combine
+  let ys = split yes
+  let ns = split no
+  combine <$> sequence [ mux sel y n | (y,n) <- zipChecked ys ns ]
 
 zipChecked :: [a] -> [b] -> [(a,b)]
 zipChecked xs ys = do
