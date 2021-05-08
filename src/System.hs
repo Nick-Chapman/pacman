@@ -2,8 +2,7 @@ module System(
   System(..), Eff(..), Reg, RomId, RomSpec(..), RamId,
   Conf(..),elaborate,
   -- effect-free combinators
-  E(..), -- TODO: avoid exposing constructors
-  eNot, combine, split, index,
+  E, eLit, eSized, eNot, keyDown, combine, split, index,
   ) where
 
 import Control.Monad (ap,liftM)
@@ -190,6 +189,12 @@ sizeE = \case
 -- operators without effects:
 --   easier to compose for caller; make it clear that no Ops are generated
 
+keyDown :: Key -> E Bit
+keyDown = E_KeyDown
+
+----------------------------------------------------------------------
+-- split/combine
+
 combine :: [E Bit] -> E [Bit]
 combine es =
   case tryLiteralizeBits es of
@@ -212,3 +217,12 @@ split = \case
 
 index :: E [Bit] -> Int -> E Bit
 index e i = reverse (split e) !! i
+
+----------------------------------------------------------------------
+-- literals
+
+eLit :: Size -> a -> E a
+eLit = E_Lit
+
+eSized :: Size -> Int -> E Nat
+eSized size i = do E_Nat (sizedNat size i)

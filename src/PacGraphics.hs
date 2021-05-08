@@ -387,10 +387,6 @@ nat8,nat9 :: Int -> E Nat
 nat8 = eSized 8
 nat9 = eSized 9
 
-eSized :: Size -> Int -> E Nat
-eSized size i = E_Nat (sizedNat size i)
-
 b0,b1 :: E Bit
-b0 = E_Lit 1 B0
-b1 = E_Lit 1 B1
-
+b0 = eLit 1 B0
+b1 = eLit 1 B1

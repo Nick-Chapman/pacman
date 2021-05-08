@@ -35,8 +35,8 @@ decodeAsRGB w = do
   let
     bit :: Int -> Int -> Eff (E Nat)
     bit i v =
-      --switch (w `index` i) (nat8 v) (nat8 0)
-      _muxBits (w `index` i) (nat8 v) (nat8 0)
+      switch (w `index` i) (nat8 v) (nat8 0)
+      --_muxBits (w `index` i) (nat8 v) (nat8 0)
   r <- do
     x <- bit 0 0x21
     y <- bit 1 0x47
@@ -65,9 +65,9 @@ data MS = MS
 moveSquare :: Int -> MS -> Eff ()
 moveSquare w MS{xposReg,enterLastReg,highReg}= do
 
-    let goingRight = E_KeyDown KeyX
-    let shift = E_KeyDown KeyShift -- colour
-    let enter = E_KeyDown KeyEnter -- switch high/low line
+    let goingRight = keyDown KeyX
+    let shift = keyDown KeyShift -- colour
+    let enter = keyDown KeyEnter -- switch high/low line
 
     xpos <- GetReg xposReg
 
@@ -181,7 +181,3 @@ nibble = eSized 4
 
 one :: E [Bit]
 one = eSized (Size 1) 1
-
-eSized :: Size -> Int -> E Nat
-eSized size i = do
-  E_Nat (sizedNat size i)
