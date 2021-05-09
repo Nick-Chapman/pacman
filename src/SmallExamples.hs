@@ -6,29 +6,62 @@ import Value
 cols :: System
 cols = do
   DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
+  DeclareReg (Size 3) $ \rx -> do
+  DeclareReg (Size 3) $ \ry -> do
+  DeclareReg (Size 4) $ \ri -> do
+  let rr = (rx,ry)
   FrameEffect $ do
-    showCols 10 16 colRom
-    pure ()
+    Repeat 64 $ do
+      SetReg ri (eSized 4 0)
+      Repeat 16 $ do
+        colSquare rr colRom ri
+        increment ri
+      incXY rr
 
-square :: System
-square = do
-  DeclareReg1 $ \enterLastReg -> do
-  DeclareReg1 $ \highReg -> do
-  DeclareReg Size {size = 7} $ \xposReg -> do
-  let ms = MS {enterLastReg,highReg,xposReg}
-  FrameEffect $ do
-    moveSquare 5 ms
+_eRepeat :: Int -> Eff() -> Eff ()
+_eRepeat n e = sequence_ (replicate n e)
 
-showCols :: Int -> Int -> RomId -> Eff ()
-showCols w n colRom = sequence_ [colSquare w colRom i | i <- [0..n-1]]
+increment :: Reg Nat -> Eff ()
+increment r = do
+  n <- GetReg r
+  n' <- Plus n one
+  SetReg r n'
 
-colSquare :: Int -> RomId -> Int -> Eff ()
-colSquare w colRom i = do
-  let nib = nibble i
-  byte <- ReadRomByte colRom nib
+colSquare :: (Reg Nat, Reg Nat) -> RomId -> Reg Nat -> Eff ()
+colSquare rr colRom ri = do
+  i <- GetReg ri
+  byte <- ReadRomByte colRom i
   col <- decodeAsRGB byte
-  let xy = XY { x = nat8 (14 * i), y = nat8 0 }
-  setSquare w xy col
+  let x = combine (split i ++ [b0,b0,b0,b0])
+  let xy = XY { x, y = nat8 0 }
+  setSquareR rr xy col
+    where b0 = eLit 0 B0
+
+setSquareR :: (Reg Nat, Reg Nat) -> XY (E Nat) -> RGB (E Nat) -> Eff ()
+setSquareR (rx,ry) loc col = do
+  x <- GetReg rx
+  y <- GetReg ry
+  let offset = XY{x,y}
+  xy <- addXY loc offset
+  SetPixel xy col
+
+incXY :: (Reg Nat, Reg Nat) -> Eff ()
+incXY (rx,ry) = do
+  x <- GetReg rx
+  y <- GetReg ry
+  x' <- Plus x one
+  SetReg rx x'
+  carry <- allBitsSet (split x)
+  y1 <- Plus y one
+  y' <- Mux carry y1 y
+  SetReg ry y'
+
+allBitsSet :: [E Bit] -> Eff (E Bit)
+allBitsSet = \case
+  [] -> pure (eLit 1 B1)
+  x:xs -> do
+    y <- allBitsSet xs
+    And x y
 
 decodeAsRGB :: E Nat -> Eff (RGB (E Nat))
 decodeAsRGB w = do
@@ -61,6 +94,15 @@ data MS = MS
   , enterLastReg :: Reg Bit
   , highReg :: Reg Bit
   }
+
+square :: System
+square = do
+  DeclareReg1 $ \enterLastReg -> do
+  DeclareReg1 $ \highReg -> do
+  DeclareReg Size {size = 7} $ \xposReg -> do
+  let ms = MS {enterLastReg,highReg,xposReg}
+  FrameEffect $ do
+    moveSquare 5 ms
 
 moveSquare :: Int -> MS -> Eff ()
 moveSquare w MS{xposReg,enterLastReg,highReg}= do
@@ -96,6 +138,12 @@ moveSquare w MS{xposReg,enterLastReg,highReg}= do
     setSquare w loc col
 
 
+setSquare :: Int -> XY (E Nat) -> RGB (E Nat) -> Eff ()
+setSquare width loc col = do
+  let dels = [ XY{x,y} | x <- map nat8 [0..width-1], y <- map nat8 [0..width-1] ]
+  sequence_ [do xy <- addXY loc offset; SetPixel xy col | offset <- dels]
+
+
 switchXY :: E Bit -> XY (E Nat) -> XY (E Nat) -> Eff (XY (E Nat))
 switchXY sel XY{x=x1,y=y1} XY{x=x2,y=y2} = do
   x <- switch sel x1 x2
@@ -122,11 +170,6 @@ _switch sel yes no = do
 switch :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
 switch sel yes no = do
   Mux sel yes no
-
-setSquare :: Int -> XY (E Nat) -> RGB (E Nat) -> Eff ()
-setSquare width loc col = do
-  let dels = [ XY{x,y} | x <- map nat8 [0..width-1], y <- map nat8 [0..width-1] ]
-  sequence_ [do xy <- addXY loc offset; SetPixel xy col | offset <- dels]
 
 addXY :: XY (E Nat) -> XY (E Nat) -> Eff (XY (E Nat))
 addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
@@ -176,8 +219,8 @@ andG = And
 nat8 :: Int -> E Nat
 nat8 = eSized 8
 
-nibble :: Int -> E Nat
-nibble = eSized 4
+--nibble :: Int -> E Nat
+--nibble = eSized 4
 
 one :: E [Bit]
 one = eSized (Size 1) 1

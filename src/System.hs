@@ -28,6 +28,7 @@ data System
 data Eff a where
   Ret :: a -> Eff a
   Bind :: Eff a -> (a -> Eff b) -> Eff b
+  Repeat :: Int -> Eff () -> Eff ()
   CaseBit :: E Bit -> Eff Bit
   SetPixel :: XY (E Nat) -> RGB (E Nat) -> Eff ()
   GetReg :: Reg a -> Eff (E a)
@@ -76,27 +77,46 @@ elaborate Conf{specializeRoms} = loop es0
 
 data CS = CS
   { u :: Int
+  -- TODO: track register values at compile time, for constant propogation
   }
 
 type Roms = Map RomId Rom
 
+type Res = (CS,Prog)
+
+doStep :: Step -> Res -> Res
+doStep step = doProg (P_Step step)
+
+doProg :: Prog -> Res -> Res
+doProg prog1 (cs,prog2) = (cs, P_Seq prog1 prog2)
+
 compile0 :: Roms -> Eff () -> Prog
-compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
+compile0 roms eff0 = do
+  let s0 = CS { u = 0 }
+  let (_,prog) :: Res = comp s0 eff0 $ \s () -> (s,P_Halt)
+  prog
   where
-    comp :: CS -> Eff a -> (CS -> a -> Prog) -> Prog
+    comp :: CS -> Eff a -> (CS -> a -> Res) -> Res
     comp s eff k = case eff of
 
       Ret a -> k s a
       Bind e f -> comp s e $ \s a -> comp s (f a) k
 
-      SetPixel xy rgb -> P_Seq (S_SetPixel xy rgb) (k s ())
-      SetReg reg exp -> P_Seq (S_SetReg reg exp) (k s ())
+      Repeat n e -> do
+        let (s',prog) = comp s e $ \s () -> (s,P_Halt)
+        doProg (P_Repeat n prog) (k s' ())
+
+      SetPixel xy rgb -> doStep (S_SetPixel xy rgb) (k s ())
+      SetReg reg exp -> doStep (S_SetReg reg exp) (k s ())
 
       CaseBit bit -> do -- DONT USE ME, I BLOW UP
         case bit of
           E_Lit _ B1 -> k s B1
           E_Lit _ B0 -> k s B0
-          _ -> P_If bit (k s B1) (k s B0)
+          _ -> do
+            let (s1,p1) = k s B1
+            let (s2,p2) = k s1 B1
+            (s2, P_If bit p1 p2)
 
       GetReg reg@(Reg size _) -> do
         shareV s size (O_Reg reg) $ \s tmp ->
@@ -145,20 +165,19 @@ compile0 roms eff0 = comp CS { u = 0 } eff0 (\_ _ -> P_Halt)
           k s (E_Tmp tmp)
 
       WriteRam id a b -> do
-        P_Seq (S_WriteRam id a b) (k s ())
+        doStep (S_WriteRam id a b) (k s ())
 
-
-share1 :: CS -> Oper Bit -> (CS -> Tmp Bit -> Prog) -> Prog
+share1 :: CS -> Oper Bit -> (CS -> Tmp Bit -> Res) -> Res
 share1 s@CS{u} oper k = do
   let tmpId = TmpId { u }
   let tmp = Tmp1 tmpId
-  P_Seq (S_Let tmp oper) (k s { u = u + 1 } tmp)
+  doStep (S_Let tmp oper) (k s { u = u + 1 } tmp)
 
-shareV :: CS -> Size -> Oper [Bit] -> (CS -> Tmp [Bit] -> Prog) -> Prog
+shareV :: CS -> Size -> Oper [Bit] -> (CS -> Tmp [Bit] -> Res) -> Res
 shareV s@CS{u} size oper k = do
   let tmpId = TmpId { u }
   let tmp = Tmp size tmpId
-  P_Seq (S_Let tmp oper) (k s { u = u + 1 } tmp)
+  doStep (S_Let tmp oper) (k s { u = u + 1 } tmp)
 
 trySimpAnd :: (E Bit, E Bit) -> Maybe (E Bit)
 trySimpAnd = \case

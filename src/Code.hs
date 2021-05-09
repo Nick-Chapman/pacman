@@ -30,8 +30,10 @@ data Code = Code
 -- statement in the generated program, works in context of some decs
 data Prog where
   P_Halt :: Prog
-  P_Seq :: Step -> Prog -> Prog
+  P_Seq :: Prog -> Prog -> Prog
+  P_Step :: Step -> Prog
   P_If :: E Bit -> Prog -> Prog -> Prog
+  P_Repeat :: Int -> Prog -> Prog
 
 -- basic program step (statement), which is sequenced in a program
 data Step where
@@ -123,9 +125,11 @@ loadRoms romSpecs =
 
 -- make no use of IO, but nice for debug
 runForOneFrame :: Prog -> Context -> State -> Keys -> IO (Picture,State)
-runForOneFrame prog context state keys = do
-  let rs = RS { context, state, keys, screen = screen0, tmps = Map.empty }
-  pure $ runProg rs prog
+runForOneFrame prog context state0 keys = do
+  let rs = RS { context, state = state0, keys, screen = screen0, tmps = Map.empty }
+  case runProg rs prog of
+    RS{screen,state} ->
+      pure (pictureScreen screen, state)
 
 data RS = RS
   { context :: Context
@@ -137,16 +141,19 @@ data RS = RS
 
 type Tmps = Map TmpId [Bit]
 
-runProg :: RS -> Prog -> (Picture,State)
-runProg rs@RS{screen,state} = \case
-  P_Halt -> (pictureScreen screen, state)
-  P_Seq step prog -> do
-    let rs' = evalStep rs step
-    runProg rs' prog
+runProg :: RS -> Prog -> RS
+runProg rs = \case
+  P_Halt -> rs
+  P_Seq p1 p2 -> runProg (runProg rs p1) p2
+  P_Step step -> evalStep rs step
   P_If cond this that -> do
     case evalE rs cond of
       B1 -> runProg rs this
       B0 -> runProg rs that
+  P_Repeat n p -> loop 0 rs
+    where
+      loop i rs =
+        if i < n then loop (i+1) (runProg rs p) else rs
 
 evalStep :: RS -> Step -> RS
 evalStep rs@RS{screen,state,tmps} = \case
@@ -271,12 +278,17 @@ instance Pretty Code where
 instance Pretty Prog where
   lay = \case
     P_Halt -> []
-    P_Seq step prog -> lay step ++ lay prog
+    P_Seq p1 p2 -> lay p1 ++ lay p2
+    P_Step s -> lay s
     P_If cond this that ->
       ["if (" ++ show cond ++ ") {"]
       ++ tab (lay this)
       ++ ["} else {"]
       ++ tab (lay that) ++ ["}"]
+    P_Repeat n prog ->
+      ["repeat (" ++ show n ++ ") {"]
+      ++ tab (lay prog)
+      ++ ["}"]
 
 instance Pretty Step where lay x = [show x]
 
