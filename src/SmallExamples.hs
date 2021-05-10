@@ -103,6 +103,7 @@ square = do
   let ms = MS {enterLastReg,highReg,xposReg}
   FrameEffect $ do
     moveSquare 5 ms
+    --moveSquare 5 ms
 
 moveSquare :: Int -> MS -> Eff ()
 moveSquare w MS{xposReg,enterLastReg,highReg}= do
@@ -112,14 +113,18 @@ moveSquare w MS{xposReg,enterLastReg,highReg}= do
     let enter = keyDown KeyEnter -- switch high/low line
 
     xpos <- GetReg xposReg
-
     enterLast <- GetReg enterLastReg
+    high <- GetReg highReg
+
     switchHeight <- posEdge enterLast enter
     SetReg enterLastReg enter
 
-    xposPlus1 <- Plus xpos one
+    {-xposPlus1 <- Plus xpos one
     nextXpos <- switch goingRight xposPlus1 xpos
-    SetReg xposReg nextXpos
+    SetReg xposReg nextXpos-}
+    if_ goingRight $ do
+      xposPlus1 <- Plus xpos one
+      SetReg xposReg xposPlus1
 
     let here = XY {x = xpos, y = nat8 75}
     let there = XY {x = xpos, y = nat8 85}
@@ -127,15 +132,23 @@ moveSquare w MS{xposReg,enterLastReg,highReg}= do
     let red = RGB { r = nat8 255, g = nat8 0, b = nat8 0 }
     let green = RGB { r = nat8 0, g = nat8 255, b = nat8 0 }
 
-    high <- GetReg highReg
-    highBar <- notG high
+    {-highBar <- notG high
     nextHigh <- mux switchHeight highBar high
-    SetReg highReg nextHigh
+    SetReg highReg nextHigh-}
+    if_ switchHeight $
+      SetReg highReg (eNot high)
 
     loc <- switchXY high here there
     col <- switchRGB shift green red
 
     setSquare w loc col
+
+
+if_ :: E Bit -> Eff () -> Eff ()
+if_ e then_ = do
+  Ite e $ \case
+    B0 -> pure ()
+    B1 -> then_
 
 
 setSquare :: Int -> XY (E Nat) -> RGB (E Nat) -> Eff ()

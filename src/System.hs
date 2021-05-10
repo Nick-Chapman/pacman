@@ -39,6 +39,7 @@ data Eff a where
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
   ReadRam :: RamId -> E Nat -> Eff (E Nat)
   WriteRam :: RamId -> E Nat -> E Nat -> Eff ()
+  Ite :: E Bit -> (Bit -> Eff ()) -> Eff ()
 
 data ES = ES -- elaboration state
   { regId :: RegId
@@ -77,9 +78,17 @@ elaborate Conf{specializeRoms} = loop es0
 
 data CS = CS
   { u :: Int
-  , regs :: Map RegId (E [Bit])
-  -- TODO: also track 1-bit regs (or find a way to be generic)
+  , regs1 :: Map RegId (E Bit) -- 1-bit regs
+  , regsV :: Map RegId (E [Bit]) -- vector regs
   }
+
+{-
+iteCS :: E Bit -> CS -> CS -> CS
+iteCS = undefined
+
+ite :: E Bit -> E a -> E a
+ite sel yes no = if yes == no then yes else ...
+-}
 
 type Roms = Map RomId Rom
 
@@ -97,18 +106,20 @@ sequenceSteps = \case
   x1:xs -> P_Seq (P_Step x1) (sequenceSteps xs)
 
 flushRegs :: CS -> () -> Res
-flushRegs = \cs@CS{regs} () -> do
-  let steps = [ S_SetReg (Reg (sizeE e) regId) e | (regId,e) <- Map.toList regs ]
-  (cs { regs = Map.empty }, sequenceSteps steps)
+flushRegs = \cs@CS{regs1,regsV} () -> do
+  let steps1 = [ S_SetReg (Reg1 rid) e | (rid,e) <- Map.toList regs1 ]
+  let stepsV = [ S_SetReg (Reg (sizeE e) rid) e | (rid,e) <- Map.toList regsV ]
+  (cs { regs1 = Map.empty, regsV = Map.empty }
+    , sequenceSteps (steps1 ++ stepsV))
 
 compile0 :: Roms -> Eff () -> Prog
 compile0 roms eff0 = do
-  let s0 = CS { u = 0, regs = Map.empty }
+  let s0 = CS { u = 0, regs1 = Map.empty, regsV = Map.empty }
   let (_,prog) :: Res = comp s0 eff0 flushRegs
   prog
   where
     comp :: CS -> Eff a -> (CS -> a -> Res) -> Res
-    comp s eff k = case eff of
+    comp s@CS{regs1,regsV} eff k = case eff of
 
       Ret a -> k s a
       Bind e f -> comp s e $ \s a -> comp s (f a) k
@@ -117,6 +128,25 @@ compile0 roms eff0 = do
         let (s1,progF) = flushRegs s ()
         let (s2,progE) = comp s1 e flushRegs
         doProg progF (doProg (P_Repeat n progE) (k s2 ()))
+
+      Ite bit f -> do
+        case bit of
+          E_Lit _ B1 -> comp s (f B1) k
+          E_Lit _ B0 -> comp s (f B0) k
+          _ -> do
+            -- TODO: we can do better than this;
+            -- only flush regs assigned differently in the two branches
+            let (s0,p0) = flushRegs s ()
+            let (s1,p1) = comp s0 (f B1) flushRegs
+            let (s2,p2) = comp s1 (f B0) flushRegs
+            doProg p0 (doProg (P_If bit p1 p2) (k s2 ()))
+
+            -- Try to merge current-reg maps...
+            {-let s0 = s
+            let (s1@CS{u=u1},p1) = comp s0 (f B1) $ \s () -> (s,P_Halt)
+            let (s2@CS{u=u2},p2) = comp s0 {u=u1} (f B0) $ \s () -> (s,P_Halt)
+            let s3 :: CS = (iteCS bit s1 s2) {u = u2}
+            doProg p1 (doProg p2 (k s3 ()))-}
 
       SetPixel xy rgb -> doStep (S_SetPixel xy rgb) (k s ())
 
@@ -129,18 +159,21 @@ compile0 roms eff0 = do
             let (s2,p2) = k s1 B1
             (s2, P_If bit p1 p2)
 
-      SetReg reg@(Reg1{}) exp -> doStep (S_SetReg reg exp) (k s ())
-      GetReg reg@Reg1{} -> do
-        share1 s (O_Reg reg) $ \s tmp ->
-          k s (E_Tmp tmp)
+      SetReg (Reg1 rid) exp ->
+        k s { regs1 = Map.insert rid exp regs1 } ()
 
-      SetReg (Reg _ regId) exp -> do
-        let CS{regs} = s
-        k s { regs = Map.insert regId exp regs } ()
+      SetReg (Reg _ rid) exp -> do
+        k s { regsV = Map.insert rid exp regsV } ()
 
-      GetReg reg@(Reg size regId) -> do
-        let CS{regs} = s
-        case Map.lookup regId regs of
+      GetReg reg@(Reg1 rid) -> do
+        case Map.lookup rid regs1 of
+          Just e -> k s e
+          Nothing -> do
+            share1 s (O_Reg reg) $ \s tmp ->
+              k s (E_Tmp tmp)
+
+      GetReg reg@(Reg size rid) -> do
+        case Map.lookup rid regsV of
           Just e -> k s e
           Nothing -> do
             shareV s size (O_Reg reg) $ \s tmp ->

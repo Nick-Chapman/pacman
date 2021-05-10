@@ -7,6 +7,7 @@ import Prelude hiding (not,and,or,(<=))
 import System
 import Value
 
+
 -- TODO: just noticed we seem to be missing the vram lookup..??!
 -- hmm, maybe that is what the 'sprite_xy_ram' is for?
 -- NO.
@@ -186,16 +187,17 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- sprite_xy_ram
   sprite_xy_ram_temp :: E B8 <-
-    ReadRam sprite_xy_ram i_ab
+    --ReadRam sprite_xy_ram i_ab -- TODO, the address for this read seems too wide!
+    ReadRam sprite_xy_ram (i_ab `slice` (3,0))
 
   -- p_sprite_ram_comb
   dr :: E B8 <- do
     {-CaseBit i_hblank >>= \case
       B1 -> pure $ notV sprite_xy_ram_temp
       B0 -> pure $ bits (replicate 8 b1)-}
-    Mux i_hblank
-      (notV sprite_xy_ram_temp)
-      (bits (replicate 8 b1))
+    mux i_hblank
+      YesNo { yes = notV sprite_xy_ram_temp
+            , no = bits (replicate 8 b1) }
 
   do -- p_char_regs
     hIs011 <- (i_hcnt `slice` (2,0)) `isV` [B0,B1,B1]
@@ -210,14 +212,22 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
       db_reg <= i_db
 
   -- p_flip_comb
-  -- TODO HERE ** avoid all combinational uses of CaseBit & replace with Mux **
   (xflip,yflip) <- do
+{-
+  -- TODO HERE ** avoid all combinational uses of CaseBit & replace with Mux **
     char_hblank_reg <- GetReg char_hblank_reg
     CaseBit char_hblank_reg >>= \case
       B0 -> pure (i_flip, i_flip)
       B1 -> do
         db_reg <- GetReg db_reg
         pure (db_reg `index` 1, db_reg `index` 0)
+-}
+    char_hblank_reg <- GetReg char_hblank_reg
+    db_reg <- GetReg db_reg
+    xy <- mux char_hblank_reg YesNo { no = bits [i_flip, i_flip]
+                                    , yes = db_reg `slice` (1,0) }
+    let [x,y] = split xy
+    pure (x,y)
 
   -- p_char_addr_comb
   obj_on <- do
@@ -229,12 +239,21 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
     char_hblank_reg <- GetReg char_hblank_reg
     db_reg <- GetReg db_reg
     let ca_11_6 = db_reg `slice` (7,2)
+
     ca54 <- do
+{-
       CaseBit (char_hblank_reg `isB` B0) >>= \case
         B1 -> pure $ db_reg `slice` (1,0)
         B0 -> do
           ca5 <- (char_sum_reg `index` 3) `xor` xflip
           pure $ bits [ca5, i_hcnt `index` 3]
+-}
+      ca5 <- (char_sum_reg `index` 3) `xor` xflip
+      mux (char_hblank_reg `isB` B0)
+        YesNo { yes = db_reg `slice` (1,0)
+              , no = bits [ca5, i_hcnt `index` 3]
+              }
+
     ca3 <- (i_hcnt `index` 2) `xor` yflip
     ca2 <- (char_sum_reg `index` 2) `xor` xflip
     ca1 <- (char_sum_reg `index` 1) `xor` xflip
@@ -243,18 +262,24 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- char roms
   -- TODO: must we model the enable?
-  char_rom_5e_dout :: E B8 <-
-    CaseBit ena_6 >>= \case B1 -> ReadRomByte char_rom_5e ca; B0 -> pure byte0
+  char_rom_5e_dout :: E B8 <- do
+    --CaseBit ena_6 >>= \case B1 -> ReadRomByte char_rom_5e ca; B0 -> pure byte0
+    read <- ReadRomByte char_rom_5e ca
+    mux ena_6 YesNo{ yes = read, no = byte0 }
 
-  char_rom_5f_dout :: E B8 <-
-    CaseBit ena_6 >>= \case B1 -> ReadRomByte char_rom_5f ca; B0 -> pure byte0
+  char_rom_5f_dout :: E B8 <- do
+    --CaseBit ena_6 >>= \case B1 -> ReadRomByte char_rom_5f ca; B0 -> pure byte0
+    read <- ReadRomByte char_rom_5f ca
+    mux ena_6 YesNo{ yes = read, no = byte0 }
 
   -- p_char_data_mux
   cd :: E B8 <- do
     char_hblank_reg <- GetReg char_hblank_reg
-    CaseBit char_hblank_reg >>= \case
+    {-CaseBit char_hblank_reg >>= \case
       B0 -> pure char_rom_5e_dout
-      B1 -> pure char_rom_5f_dout
+      B1 -> pure char_rom_5f_dout-}
+    mux char_hblank_reg YesNo { no = char_rom_5e_dout
+                              , yes = char_rom_5f_dout }
 
   -- p_char_shift_comb
   (shift_sel,shift_op) <- do
@@ -262,24 +287,32 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
     vout_yflip <- GetReg vout_yflip
     shift_regu <- GetReg shift_regu
     shift_regl <- GetReg shift_regl
-    CaseBit vout_yflip >>= \case
+    {-CaseBit vout_yflip >>= \case
       B0 -> pure (bits [b1,ip], bits [shift_regu `index` 3, shift_regl `index` 3])
-      B1 -> pure (bits [ip,b1], bits [shift_regu `index` 0, shift_regl `index` 0])
+      B1 -> pure (bits [ip,b1], bits [shift_regu `index` 0, shift_regl `index` 0])-}
+    shift_sel <- mux vout_yflip YesNo
+      { no = bits [b1,ip]
+      , yes = bits [ip,b1] }
+    shift_op <- mux vout_yflip YesNo
+      { no = bits [shift_regu `index` 3, shift_regl `index` 3]
+      , yes = bits [shift_regu `index` 0, shift_regl `index` 0] }
+    pure (shift_sel, shift_op)
+
 
   do -- p_char_shift
     shift_regu' <- GetReg shift_regu
     shift_regl' <- GetReg shift_regl
     if_ ena_6 $ do
-      CaseBit (shift_sel `index` 1) >>= \case
+      ite (shift_sel `index` 1) $ \case
         B0 -> do
-          CaseBit (shift_sel `index` 0) >>= \case
+          ite (shift_sel `index` 0) $ \case
             B0 -> do
               pure ()
             B1 -> do
               shift_regu <= bits [b0] & (shift_regu' `slice` (3,1))
               shift_regl <= bits [b0] & (shift_regl' `slice` (3,1))
         B1 -> do
-          CaseBit (shift_sel `index` 0) >>= \case
+          ite (shift_sel `index` 0) $ \case
             B0 -> do
               shift_regu <= shift_regu' `slice` (2,0) & bits [b0]
               shift_regl <= shift_regl' `slice` (2,0) & bits [b0]
@@ -316,7 +349,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   do -- p_ra_cnt
     if_ ena_6 $ do
-      CaseBit cntr_ld >>= \case
+      ite cntr_ld $ \case
         B1 -> do
           SetReg ra dr
         B0 -> do
@@ -335,21 +368,29 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
   sprite_ram_op :: E B4 <- do
     let a = sprite_ram_addr `slice` (4,1)
     b <- do
+{-
       CaseBit ena_6 >>= \case
         B1 -> ReadRam sprite_ram a
         B0 -> pure nibble0
+-}
+      read <- ReadRam sprite_ram a
+      mux ena_6 YesNo{ yes = read, no = nibble0 }
     let s = sprite_ram_addr `index` 0
     -- TODO: which way around are the nibbles addressed by the LSB ?
+{-
     CaseBit s >>= \case
       B1 -> pure $ b `slice` (7,4)
       B0 -> pure $ b `slice` (3,0)
+-}
+    mux s YesNo { yes = b `slice` (7,4), no = b `slice` (3,0) }
 
   -- p_sprite_ram_op_comb
   sprite_ram_reg :: E B4 <- do
     vout_obj_on_t1 <- GetReg vout_obj_on_t1
-    CaseBit vout_obj_on_t1 >>= \case
+    {-CaseBit vout_obj_on_t1 >>= \case
       B1 -> pure sprite_ram_op
-      B0 -> pure nibble0
+      B0 -> pure nibble0-}
+    mux vout_obj_on_t1 YesNo { yes = sprite_ram_op, no = nibble0 }
 
   -- p_video_op_sel_comb
   video_op_sel :: E Bit <- do
@@ -372,12 +413,15 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
   final_col :: E B4 <- do
     vout_hblank <- GetReg vout_hblank
     cond <- vout_hblank `or` i_vblank
-    CaseBit cond >>= \case
+    {-CaseBit cond >>= \case
       B1 -> pure nibble0
       B0 -> do
         CaseBit video_op_sel >>= \case
           B1 -> pure sprite_ram_reg
-          B0 -> pure $ lut_4a `slice` (3,0)
+          B0 -> pure $ lut_4a `slice` (3,0)-}
+    v <- mux video_op_sel YesNo { yes = sprite_ram_reg
+                                , no = lut_4a `slice` (3,0) }
+    mux cond YesNo { yes = nibble0 , no = v }
 
   -- col_rom_7f
   lut_7f :: E B8 <- do
@@ -439,7 +483,7 @@ isB e = \case
   B0 -> not e
   B1 -> e
 
-allBitsSet :: [E Bit] -> Eff (E Bit)
+allBitsSet :: [E Bit] -> Eff (E Bit) -- TODO: should have a built-in oper for this
 allBitsSet = \case
   [] -> pure b1
   x:xs -> do
@@ -452,6 +496,7 @@ zipChecked xs ys = do
   let yn = length ys
   if xn /= yn then error (show ("zipChecked",xn,yn)) else
     zip xs ys
+
 
 ----------------------------------------------------------------------
 --gates
@@ -476,6 +521,12 @@ xor x y = do
 notV :: E [Bit] -> E [Bit]
 notV = combine . map not . split
 
+
+data YesNo a = YesNo { yes :: a, no :: a }
+
+mux :: E Bit -> YesNo (E [Bit]) -> Eff (E [Bit])
+mux sel YesNo{yes,no} = Mux sel yes no
+
 ----------------------------------------------------------------------
 -- other opps
 
@@ -485,9 +536,14 @@ infix 0 <=
 
 if_ :: E Bit -> Eff () -> Eff ()
 if_ e then_ = do
-  CaseBit e >>= \case
+  ite e $ \case
     B0 -> pure ()
     B1 -> then_
+
+
+ite :: E Bit -> (Bit -> Eff ()) -> Eff ()
+--ite sel f = CaseBit sel >>= f
+ite = Ite
 
 ----------------------------------------------------------------------
 -- aliases for specific bit widths (if I ever try for length-indexed vectors)
@@ -540,7 +596,7 @@ video_timing VideoTimingRegs{..} ena_6 = do
         hcnt <- GetReg hcnt
         allBitsSet (split hcnt)
 
-      CaseBit hcarry >>= \case
+      ite hcarry $ \case
         B1 -> hcnt <= eSized (Size 9) 0x080
         B0 -> increment hcnt
 
@@ -549,7 +605,7 @@ video_timing VideoTimingRegs{..} ena_6 = do
         allBitsSet (split vcnt)
 
       if_ do_hsync $ do
-        CaseBit vcarry >>= \case
+        ite vcarry $ \case
           B1 -> do
             vcnt <= eSized (Size 9) 0xF8
           B0 -> do
@@ -575,10 +631,12 @@ video_timing VideoTimingRegs{..} ena_6 = do
 
       if_ do_hsync $ do
         vcnt <- GetReg vcnt
-        vcnt `isV` sizedNat 9 0x1EF >>= CaseBit >>= \case
+        c1 <- vcnt `isV` sizedNat 9 0x1EF
+        ite c1 $ \case
           B1 -> do vblank <= b1
           B0 -> do
-            vcnt `isV` sizedNat 9 0x10F >>= CaseBit >>= \case
+            c0 <- vcnt `isV` sizedNat 9 0x10F
+            ite c0 $ \case
               B1 -> do vblank <= b0
               B0 -> do pure ()
 
