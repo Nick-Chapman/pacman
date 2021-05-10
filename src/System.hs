@@ -77,7 +77,8 @@ elaborate Conf{specializeRoms} = loop es0
 
 data CS = CS
   { u :: Int
-  -- TODO: track register values at compile time, for constant propogation
+  , regs :: Map RegId (E [Bit])
+  -- TODO: also track 1-bit regs (or find a way to be generic)
   }
 
 type Roms = Map RomId Rom
@@ -90,10 +91,20 @@ doStep step = doProg (P_Step step)
 doProg :: Prog -> Res -> Res
 doProg prog1 (cs,prog2) = (cs, P_Seq prog1 prog2)
 
+sequenceSteps :: [Step] -> Prog
+sequenceSteps = \case
+  [] -> P_Halt
+  x1:xs -> P_Seq (P_Step x1) (sequenceSteps xs)
+
+flushRegs :: CS -> () -> Res
+flushRegs = \cs@CS{regs} () -> do
+  let steps = [ S_SetReg (Reg (sizeE e) regId) e | (regId,e) <- Map.toList regs ]
+  (cs { regs = Map.empty }, sequenceSteps steps)
+
 compile0 :: Roms -> Eff () -> Prog
 compile0 roms eff0 = do
-  let s0 = CS { u = 0 }
-  let (_,prog) :: Res = comp s0 eff0 $ \s () -> (s,P_Halt)
+  let s0 = CS { u = 0, regs = Map.empty }
+  let (_,prog) :: Res = comp s0 eff0 flushRegs
   prog
   where
     comp :: CS -> Eff a -> (CS -> a -> Res) -> Res
@@ -103,11 +114,11 @@ compile0 roms eff0 = do
       Bind e f -> comp s e $ \s a -> comp s (f a) k
 
       Repeat n e -> do
-        let (s',prog) = comp s e $ \s () -> (s,P_Halt)
-        doProg (P_Repeat n prog) (k s' ())
+        let (s1,progF) = flushRegs s ()
+        let (s2,progE) = comp s1 e flushRegs
+        doProg progF (doProg (P_Repeat n progE) (k s2 ()))
 
       SetPixel xy rgb -> doStep (S_SetPixel xy rgb) (k s ())
-      SetReg reg exp -> doStep (S_SetReg reg exp) (k s ())
 
       CaseBit bit -> do -- DONT USE ME, I BLOW UP
         case bit of
@@ -118,13 +129,22 @@ compile0 roms eff0 = do
             let (s2,p2) = k s1 B1
             (s2, P_If bit p1 p2)
 
-      GetReg reg@(Reg size _) -> do
-        shareV s size (O_Reg reg) $ \s tmp ->
-          k s (E_Tmp tmp)
-
+      SetReg reg@(Reg1{}) exp -> doStep (S_SetReg reg exp) (k s ())
       GetReg reg@Reg1{} -> do
         share1 s (O_Reg reg) $ \s tmp ->
           k s (E_Tmp tmp)
+
+      SetReg (Reg _ regId) exp -> do
+        let CS{regs} = s
+        k s { regs = Map.insert regId exp regs } ()
+
+      GetReg reg@(Reg size regId) -> do
+        let CS{regs} = s
+        case Map.lookup regId regs of
+          Just e -> k s e
+          Nothing -> do
+            shareV s size (O_Reg reg) $ \s tmp ->
+              k s (E_Tmp tmp)
 
       Plus e1 e2 -> do
         case (trySimpPlus (e1,e2)) of
