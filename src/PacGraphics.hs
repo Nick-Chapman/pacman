@@ -24,8 +24,9 @@ screen = withMac $ \mac -> do
   DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
   FrameEffect $ do
     loadDump dump mac
+    loadSpriteDump mac
     drawTiles mac
-    let _ = sequence_ [drawSpriteIndex i | i <- [0..7]] -- TODO
+    sequence_ [drawSpriteIndex mac i | i <- [0..7]]
     pure ()
 
 loadDump :: RomId -> Mac -> Eff ()
@@ -37,15 +38,32 @@ loadDump dump Mac{ram} = do
               i <- [0..2047]
             ]
 
+loadSpriteDump :: Mac -> Eff ()
+loadSpriteDump Mac{spriteInfo,spriteXY} = do
+  sequence_ [ do WriteRam spriteInfo (eSized 4 i) (eSized 8 b)
+            | (i,b) <- zip [0..] info
+            ]
+  sequence_ [ do WriteRam spriteXY (eSized 4 i) (eSized 8 b)
+            | (i,b) <- zip [0..] xys
+            ]
+  where
+    info = [ 0x00, 0x00, 0x94, 0x01, 0x94, 0x03, 0x8c, 0x05
+           , 0x8c, 0x07, 0xb8, 0x09, 0xfc, 0x00, 0x00, 0x00 ]
+
+    xys = [ 0x00, 0x00, 0xb6, 0x8c, 0xa1, 0xa4, 0x97, 0x8e
+          , 0x77, 0x8e, 0xa3, 0x2c, 0x07, 0x08, 0x00, 0x00 ]
+
+
 withMac :: (Mac -> System) -> System
 withMac f =
   DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
   DeclareRom (RomSpec { path = "roms/82s126.4a", size = 256 }) $ \palRom -> do
   DeclareRom (RomSpec { path = "roms/pacman.5e", size = 4096 }) $ \tileRom -> do
   DeclareRom (RomSpec { path = "roms/pacman.5f", size = 4096 }) $ \spriteRom -> do
-  -- TODO: install roms/rams in a memory-map; for now hack it!
   DeclareRam 0x4800 $ \ram -> do
-  f (Mac { colRom, palRom, tileRom, spriteRom, ram })
+  DeclareRam 16 $ \spriteInfo -> do
+  DeclareRam 16 $ \spriteXY -> do
+  f (Mac { colRom, palRom, tileRom, spriteRom, ram, spriteInfo, spriteXY })
 
 data Mac = Mac
   { colRom :: RomId
@@ -53,6 +71,8 @@ data Mac = Mac
   , tileRom :: RomId
   , spriteRom :: RomId
   , ram :: RamId
+  , spriteInfo :: RamId
+  , spriteXY :: RamId
   }
 
 ----------------------------------------------------------------------
@@ -124,26 +144,28 @@ setSquare width loc col = do
   sequence_ [do xy <- addXY loc offset; SetPixel xy col | offset <- dels]
 
 
-----------------------------------------------------------------------
--- TODO: The screen with correctly layed out tiles + sprites
+-- draw a sprite selected and positioned by the spriteInfo/spriteXY rams
+drawSpriteIndex :: Mac -> Int -> Eff ()
+drawSpriteIndex mac@Mac{spriteInfo,spriteXY} i = do
+  info <- ReadRam spriteInfo (eSized 4 (0 + 2 * fromIntegral i))
+  palb <- ReadRam spriteInfo (eSized 4 (1 + 2 * fromIntegral i))
+  xLoc <- ReadRam spriteXY (eSized 4 (0 + 2 * fromIntegral i))
+  yLoc <- ReadRam spriteXY (eSized 4 (1 + 2 * fromIntegral i))
+  palette <- readPalette mac (PaletteIndex (mod64 palb))
+  let _yFlip = info `index` 0
+  let _xFlip = info `index` 1
+  let spriteIndex = div4 info
+  sprite <- readSprite mac (SI spriteIndex)
+  let xMax = eSized 9 (28*8 + 15)
+  let yMax = eSized 9 (32*8 + 16)
+  x <- Minus xMax xLoc
+  y <- Minus yMax yLoc
+  let xy = XY { x, y }
+  drawSprite xy sprite palette
 
-drawSpriteIndex :: Int -> Eff ()
-drawSpriteIndex i =
-  undefined i readPalette readSprite resolvePaletteItemIndex drawSprite
+div4 :: E Nat -> E Nat
+div4 i = combine (reverse (drop 2 (reverse (split i))))
 
-{-drawSpriteIndex i = do
-  xLoc <- ReadMem (0x5060 + 2 * fromIntegral i)
-  yLoc <- ReadMem (0x5061 + 2 * fromIntegral i)
-  info <- ReadMem (0x4ff0 + 2 * fromIntegral i)
-  palb <- ReadMem (0x4ff1 + 2 * fromIntegral i)
-  let yFlip = unByte info `testBit` 0
-  let xFlip = unByte info `testBit` 1
-  let spriteIndex = fromIntegral (info `div` 4)
-  let x0 = fromIntegral (28*8 + 15 - xLoc)
-  let y0 = fromIntegral (32*8 + 16 - yLoc)
-  palette <- readPalette (makePI (fromIntegral palb))
-  sprite <- readSprite (SI spriteIndex)
--}
 
 drawSprite :: XY (E Nat) -> Sprite -> Palette -> Eff ()
 drawSprite xy sprite palette = do
