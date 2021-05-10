@@ -2,7 +2,7 @@ module Value (
   XY(..), RGB(..), Key(..), Nat, Bit(..),
   Size(..),
   checkSize, isBit1, andBit, notBit, indexBits,
-  sizedNat, nat2int, plusNat, sizeOfNat,
+  sizedNat, nat2int, plusNat, minusNat, sizeOfNat,
   ) where
 
 data Key
@@ -75,3 +75,10 @@ plusNat x y = do
   let ny = length y
   let n = max nx ny
   drop 1 $ sizedNat (Size (n+1)) (nat2int x + nat2int y)
+
+minusNat :: Nat -> Nat -> Nat
+minusNat x y = do
+  let nx = length x
+  let ny = length y
+  let n = max nx ny
+  drop 1 $ sizedNat (Size (n+1)) (nat2int x - nat2int y) -- ???

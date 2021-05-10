@@ -35,6 +35,7 @@ data Eff a where
   SetReg :: Show a => Reg a -> E a -> Eff ()
   And :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
+  Minus :: E Nat -> E Nat -> Eff (E Nat)
   Mux :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
   ReadRam :: RamId -> E Nat -> Eff (E Nat)
@@ -185,6 +186,15 @@ compile0 roms eff0 = do
           Nothing -> do
             let size = max (sizeE e1) (sizeE e2)
             let oper = O_Plus e1 e2
+            shareV s size oper $ \s tmp ->
+              k s (E_Tmp tmp)
+
+      Minus e1 e2 -> do
+        case (trySimpPlus (e1,e2)) of
+          Just e -> k s e
+          Nothing -> do
+            let size = max (sizeE e1) (sizeE e2)
+            let oper = O_Minus e1 e2
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
 

@@ -48,6 +48,7 @@ data Oper a where
   O_Reg :: Reg a -> Oper a
   O_And :: E Bit -> E Bit -> Oper Bit
   O_Plus :: E Nat -> E Nat -> Oper Nat
+  O_Minus :: E Nat -> E Nat -> Oper Nat
   O_Mux :: E Bit -> E a -> E a -> Oper a
   O_ReadRomByte :: RomId -> E Nat -> Oper Nat
   O_ReadRam :: RamId -> E Nat -> Oper Nat
@@ -189,6 +190,7 @@ evalOper :: RS -> Oper a -> a
 evalOper rs@RS{context=Context{roms},state=State{regs,rams}} = \case
   O_And e1 e2 -> andBit (evalE rs e1) (evalE rs e2)
   O_Plus e1 e2 -> plusNat (evalE rs e1) (evalE rs e2)
+  O_Minus e1 e2 -> minusNat (evalE rs e1) (evalE rs e2)
   O_Mux sel yes no ->
     evalE rs (if isBit1 (evalE rs sel) then yes else no)
   O_Reg (Reg size id) -> do
@@ -314,6 +316,7 @@ instance Show a => Show (Oper a) where
   show = \case
     O_And e1 e2 -> show e1 ++ " & " ++ show e2
     O_Plus e1 e2 -> show e1 ++ " + " ++ show e2
+    O_Minus e1 e2 -> show e1 ++ " - " ++ show e2
     O_Mux sel yes no -> show sel ++ " ? " ++ show yes ++ " : " ++ show no
     O_Reg (Reg _size id) -> show id
     O_Reg (Reg1 id) -> show id
