@@ -289,6 +289,8 @@ keyDown = E_KeyDown
 ----------------------------------------------------------------------
 -- split/combine
 
+-- TODO: rename: combine/split --> bundle/unbundle (like  "clash")
+
 combine :: [E Bit] -> E [Bit]
 combine es =
   case tryLiteralizeBits es of
