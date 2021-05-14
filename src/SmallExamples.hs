@@ -6,9 +6,9 @@ import Value
 cols :: System
 cols = do
   DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
-  DeclareReg (Size 3) $ \rx -> do
-  DeclareReg (Size 3) $ \ry -> do
-  DeclareReg (Size 4) $ \ri -> do
+  DeclareReg "rx" (Size 3) $ \rx -> do
+  DeclareReg "ry" (Size 3) $ \ry -> do
+  DeclareReg "ri" (Size 4) $ \ri -> do
   let rr = (rx,ry)
   FrameEffect $ do
     Repeat 64 $ do
@@ -97,9 +97,9 @@ data MS = MS
 
 square :: System
 square = do
-  DeclareReg1 $ \enterLastReg -> do
-  DeclareReg1 $ \highReg -> do
-  DeclareReg Size {size = 7} $ \xposReg -> do
+  DeclareReg1 "last" $ \enterLastReg -> do
+  DeclareReg1 "high" $ \highReg -> do
+  DeclareReg "xpos" Size {size = 8} $ \xposReg -> do
   let ms = MS {enterLastReg,highReg,xposReg}
   FrameEffect $ do
     moveSquare 5 ms

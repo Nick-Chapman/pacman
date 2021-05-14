@@ -21,7 +21,7 @@ import Value
 
 -- full generated code. includes decs & prog
 data Code = Code
-  { regDecs :: [(RegId,Size)]
+  { regDecs :: [(RegId,Size,String)]
   , ramDecs :: [(RamId,Size)]
   , romSpecs :: [(RomId,RomSpec)]
   , entry :: Prog
@@ -41,6 +41,7 @@ data Step where
   S_WriteRam :: RamId -> E Nat -> E Nat -> Step
   S_SetReg :: Show a => Reg a -> E a -> Step
   S_SetPixel :: XY (E Nat) -> RGB (E Nat) -> Step
+  S_Trace :: String -> E Nat -> Step
 
 -- operation (non atomic/pure expression), will always be let-bound
 -- these things MUST be name
@@ -49,6 +50,7 @@ data Oper a where
   O_And :: E Bit -> E Bit -> Oper Bit
   O_Plus :: E Nat -> E Nat -> Oper Nat
   O_Minus :: E Nat -> E Nat -> Oper Nat
+  O_IsZero :: E Nat -> Oper Bit
   O_Mux :: E Bit -> E a -> E a -> Oper a
   O_ReadRomByte :: RomId -> E Nat -> Oper Nat
   O_ReadRam :: RamId -> E Nat -> Oper Nat
@@ -107,7 +109,7 @@ data Picture where
 
 init :: Code -> IO (Context,State,Prog) -- IO to load roms from file
 init Code{entry=prog,regDecs,romSpecs,ramDecs} = do
-  let regs = Map.fromList [ (r,zeroOf size) | (r,Size {size}) <- regDecs ]
+  let regs = Map.fromList [ (r,zeroOf size) | (r,Size {size},_) <- regDecs ]
   let rams = Map.fromList [ (id,ram) | (id,Size n) <- ramDecs, let ram = Ram.init n ]
   roms <- loadRoms romSpecs
   pure $ (Context {roms},State {regs,rams},prog)
@@ -128,7 +130,7 @@ loadRoms romSpecs =
 runForOneFrame :: Prog -> Context -> State -> Keys -> IO (Picture,State)
 runForOneFrame prog context state0 keys = do
   let rs = RS { context, state = state0, keys, screen = screen0, tmps = Map.empty }
-  case runProg rs prog of
+  runProg rs prog >>= \case
     RS{screen,state} ->
       pure (pictureScreen screen, state)
 
@@ -142,10 +144,10 @@ data RS = RS
 
 type Tmps = Map TmpId [Bit]
 
-runProg :: RS -> Prog -> RS
+runProg :: RS -> Prog -> IO RS
 runProg rs = \case
-  P_Halt -> rs
-  P_Seq p1 p2 -> runProg (runProg rs p1) p2
+  P_Halt -> pure rs
+  P_Seq p1 p2 -> do rs <- runProg rs p1; runProg rs p2
   P_Step step -> evalStep rs step
   P_If cond this that -> do
     case evalE rs cond of
@@ -154,23 +156,28 @@ runProg rs = \case
   P_Repeat n p -> loop 0 rs
     where
       loop i rs =
-        if i < n then loop (i+1) (runProg rs p) else rs
+        if i < n then do rs <- runProg rs p; loop (i+1) rs
+        else pure rs
 
-evalStep :: RS -> Step -> RS
+evalStep :: RS -> Step -> IO RS
 evalStep rs@RS{screen,state,tmps} = \case
   S_Let tmp oper -> do
-    rs { tmps = bindTmp tmps (evalOper rs oper) tmp }
+    pure rs { tmps = bindTmp tmps (evalOper rs oper) tmp }
   S_WriteRam id a b ->
-    rs { state = updateRam state id (evalE rs a) (evalE rs b) }
+    pure rs { state = updateRam state id (evalE rs a) (evalE rs b) }
   S_SetReg reg e ->
-    rs { state = updateReg state (evalE rs e) reg }
+    pure rs { state = updateReg state (evalE rs e) reg }
   S_SetPixel xy rgb -> do
-    rs { screen =
+    pure rs { screen =
          setScreenPixel
          screen
          (fmap (nat2int . evalE rs) xy)
          (fmap (nat2int . evalE rs) rgb)
        }
+  S_Trace tag e -> do
+    let nat = evalE rs e
+    printf "%s : %X\n" tag (nat2int nat)
+    pure rs
 
 bindTmp :: Tmps -> a -> Tmp a -> Tmps
 bindTmp tmps val = \case
@@ -191,6 +198,7 @@ evalOper rs@RS{context=Context{roms},state=State{regs,rams}} = \case
   O_And e1 e2 -> andBit (evalE rs e1) (evalE rs e2)
   O_Plus e1 e2 -> plusNat (evalE rs e1) (evalE rs e2)
   O_Minus e1 e2 -> minusNat (evalE rs e1) (evalE rs e2)
+  O_IsZero e -> isZeroNat (evalE rs e)
   O_Mux sel yes no ->
     evalE rs (if isBit1 (evalE rs sel) then yes else no)
   O_Reg (Reg size id) -> do
@@ -257,9 +265,7 @@ setScreenPixel :: Screen -> XY Int -> RGB Int -> Screen
 setScreenPixel Screen{m} xy rgb = Screen { m = Map.insert xy rgb m }
 
 pictureScreen :: Screen -> Picture
-pictureScreen Screen{m} = Pictures [ Draw (shift xy) rgb | (xy,rgb) <- Map.toList m ]
-  where
-    shift XY{x,y} = XY { x = x+8, y = y+8 }
+pictureScreen Screen{m} = Pictures [ Draw xy rgb | (xy,rgb) <- Map.toList m ]
 
 ----------------------------------------------------------------------
 -- pretty/show
@@ -273,7 +279,7 @@ class Pretty a where
 instance Pretty Code where
   lay Code{romSpecs,regDecs,ramDecs,entry} =
     [ "rom " ++ show id ++ " : " ++ show spec | (id,spec) <- romSpecs ] ++
-    [ "reg " ++ show id ++ " : " ++ show size | (id,size) <- regDecs ] ++
+    [ "reg " ++ show id ++ " : " ++ show size ++ " // " ++ name | (id,size,name) <- regDecs ] ++
     [ "ram " ++ show id ++ " : " ++ show size | (id,size) <- ramDecs ] ++
     lay entry
 
@@ -306,6 +312,7 @@ instance Show Step where
     S_WriteRam id a b -> show id ++ "[" ++ show a ++ "] := " ++ show b
     S_SetReg reg exp -> show reg ++ " := " ++ show exp
     S_SetPixel xy rgb -> "set-pixel " ++ show xy ++ " := " ++ show rgb
+    S_Trace tag exp -> "trace: " ++ tag ++ " = " ++ show exp
 
 sizeOfTmp :: Tmp a -> Size
 sizeOfTmp = \case
@@ -317,6 +324,7 @@ instance Show a => Show (Oper a) where
     O_And e1 e2 -> show e1 ++ " & " ++ show e2
     O_Plus e1 e2 -> show e1 ++ " + " ++ show e2
     O_Minus e1 e2 -> show e1 ++ " - " ++ show e2
+    O_IsZero e -> "isZero(" ++ show e ++ ")"
     O_Mux sel yes no -> show sel ++ " ? " ++ show yes ++ " : " ++ show no
     O_Reg (Reg _size id) -> show id
     O_Reg (Reg1 id) -> show id

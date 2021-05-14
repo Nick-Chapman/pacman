@@ -21,7 +21,10 @@ theVideoSystem = do
   withRams $ \rams -> do
   withRegisters $ \registers -> do
   withVideoTimingRegs $ \vtRegs -> do
+  DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
   FrameEffect $ do
+   loadDump dump rams
+   runForallPixels registers vtRegs $ do
 
     -- TODO: need to repeat the following effect N times
     -- for N covers all pixels. (we can prob skip the vblank)
@@ -48,7 +51,9 @@ theVideoSystem = do
     let i_ab = vram_addr_ab
     let i_flip = b0
     let i_wr2_l = b0
-    let i_db = byte0 -- TODO: NO -- this need to be the vram lookup
+
+    --let i_db = byte0 -- TODO: NO -- this need to be the vram lookup
+    i_db <- vram_lookup rams vram_addr_ab
 
     -- TODO: for testing, dont forget to set the vram from the dump
     -- and set the sprite ram from the bytes I recorded.
@@ -56,16 +61,89 @@ theVideoSystem = do
     inputs <- do
       pure Inputs { i_hcnt, i_vcnt, i_ab, i_db
                   , i_hblank, i_vblank, i_flip, i_wr2_l, ena_6 }
+
     outputs <-
       pacman_video roms rams registers inputs
 
     drivePixel inputs outputs
 
 
+vram_lookup :: Rams -> E B12 -> Eff (E B8)
+vram_lookup Rams{vram} a = do
+  ReadRam vram (bits [b0] & (a `slice` (9,0)))
+
+----------------------------------------------------------------------
+loadDump :: RomId -> Rams -> Eff ()
+loadDump dump Rams{vram} = do
+  sequence_ [ do
+                b <- ReadRomByte dump (eSized 11 i)
+                WriteRam vram (eSized 11 i) b
+            |
+              i <- [0..2047]
+            ]
+
+----------------------------------------------------------------------
+
+{-
+  -- y: AF -> B0 (x ticks)... 1FF -> 80
+  -- x: 1FF -> F8
+-}
+runForallPixels :: Registers -> VideoTimingRegs -> Eff () -> Eff ()
+{-runForallPixels Registers{vout_yflip} VideoTimingRegs{vcnt,hcnt}  eff = do
+  vout_yflip <= b0
+  vcnt <= eSized 9 0x10F
+  _eRepeat 224 $ do
+    hcnt <= eSized 9 0xEF
+    _eRepeat 288 $ do
+      eff-}
+
+runForallPixels Registers{} VideoTimingRegs{} eff = do
+  --vcnt <= eSized 9 0x10F
+  Repeat 40000 $ do
+    eff
+
+
+
+_eRepeat :: Int -> Eff() -> Eff ()
+_eRepeat n e = sequence_ (replicate n e)
+
+
 drivePixel :: Inputs -> Outputs -> Eff ()
-drivePixel _ _ =
-  pure ()
-  --undefined -- TODO
+drivePixel Inputs{i_hcnt,i_vcnt} Outputs{o_red,o_green,o_blue} = do
+  let x = i_vcnt
+  let y = i_hcnt
+  let xy = XY {x, y}
+  let colByte = o_red & o_green & o_blue
+  --let colByte' = (combine . map not . split) colByte
+  rgb <- decodeAsRGB colByte
+  SetPixel xy rgb
+
+decodeAsRGB :: E Nat -> Eff (RGB (E Nat))
+decodeAsRGB w = do
+  let
+    bit :: Int -> Int -> Eff (E Nat)
+    bit i v = do
+      let c = w `index` i
+      Mux c (nat8 v) (nat8 0)
+  r <- do
+    x <- bit 0 0x21
+    y <- bit 1 0x47
+    z <- bit 2 0x97
+    add3 x y z
+  g <- do
+    x <- bit 3 0x21
+    y <- bit 4 0x47
+    z <- bit 5 0x97
+    add3 x y z
+  b <- do
+    x <- bit 6 0x51
+    y <- bit 7 0xAE
+    let z = nat8 0
+    add3 x y z
+  pure RGB { r, g, b }
+  where
+    add3 a b c = do ab <- Plus a b; Plus ab c
+    nat8 = eSized 8
 
 ----------------------------------------------------------------------
 
@@ -111,13 +189,15 @@ withRoms f = do
 data Rams = Rams
   { sprite_xy_ram :: RamId -- 16 bytes
   , sprite_ram :: RamId -- 16 bytes
+  , vram :: RamId
   }
 
 withRams :: (Rams -> System) -> System
 withRams f = do -- TODO: this rsm will be written by the CPU
   DeclareRam 16 $ \sprite_xy_ram -> do
   DeclareRam 16 $ \sprite_ram -> do
-  f Rams { sprite_xy_ram, sprite_ram }
+  DeclareRam 2048 $ \vram -> do
+  f Rams { sprite_xy_ram, sprite_ram, vram }
 
 data Registers = Registers
   { char_sum_reg :: Reg B4
@@ -140,22 +220,22 @@ data Registers = Registers
 
 withRegisters :: (Registers -> System) -> System
 withRegisters f = do
-  DeclareReg (Size 4) $ \char_sum_reg -> do
-  DeclareReg1 $ \char_match_reg -> do
-  DeclareReg1 $ \char_hblank_reg -> do
-  DeclareReg (Size 8) $ \db_reg -> do
-  DeclareReg (Size 4) $ \shift_regl -> do
-  DeclareReg (Size 4) $ \shift_regu -> do
-  DeclareReg1 $ \vout_obj_on -> do
-  DeclareReg1 $ \vout_yflip -> do
-  DeclareReg1 $ \vout_hblank -> do
-  DeclareReg (Size 5) $ \vout_db -> do
-  DeclareReg (Size 8) $ \ra -> do
-  DeclareReg (Size 12) $ \sprite_ram_addr_t1 -> do
-  DeclareReg1 $ \vout_obj_on_t1 -> do
-  DeclareReg (Size 8) $ \lut_4a_t1 -> do
-  DeclareReg1 $ \vout_hblank_t1 -> do
-  DeclareReg (Size 8) $ \video_out -> do
+  DeclareReg "char_sum_reg" (Size 4) $ \char_sum_reg -> do
+  DeclareReg1 "char_match_reg" $ \char_match_reg -> do
+  DeclareReg1 "char_hblank_reg" $ \char_hblank_reg -> do
+  DeclareReg "db_reg" (Size 8) $ \db_reg -> do
+  DeclareReg "shift_regl" (Size 4) $ \shift_regl -> do
+  DeclareReg "shift_regu" (Size 4) $ \shift_regu -> do
+  DeclareReg1 "vout_obj_on" $ \vout_obj_on -> do
+  DeclareReg1 "vout_yflip" $ \vout_yflip -> do
+  DeclareReg1 "vout_hblank" $ \vout_hblank -> do
+  DeclareReg "vout_db" (Size 5) $ \vout_db -> do
+  DeclareReg "ra" (Size 8) $ \ra -> do
+  DeclareReg "sprite_ram_addr_t1" (Size 12) $ \sprite_ram_addr_t1 -> do
+  DeclareReg1 "vout_obj_on_t1" $ \vout_obj_on_t1 -> do
+  DeclareReg "lut_4a_t1" (Size 8) $ \lut_4a_t1 -> do
+  DeclareReg1 "vout_hblank_t1" $ \vout_hblank_t1 -> do
+  DeclareReg "video_out" (Size 8) $ \video_out -> do
     f Registers
       { char_sum_reg
       , char_match_reg
@@ -181,6 +261,20 @@ withRegisters f = do
 
 pacman_video :: Roms -> Rams -> Registers -> Inputs -> Eff Outputs
 pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
+
+  char_hblank_reg' <- GetReg char_hblank_reg
+  char_match_reg' <- GetReg char_match_reg
+  char_sum_reg' <- GetReg char_sum_reg
+  db_reg' <- GetReg db_reg
+  ra' <- GetReg ra
+  shift_regl' <- GetReg shift_regl
+  shift_regu' <- GetReg shift_regu
+  video_out' <- GetReg video_out
+  vout_db' <- GetReg vout_db
+  vout_hblank' <- GetReg vout_hblank
+  vout_obj_on' <- GetReg vout_obj_on
+  vout_obj_on_t1' <- GetReg vout_obj_on_t1
+  vout_yflip' <- GetReg vout_yflip
 
   -- Seems the write into the sprit ram comes via here; let's ignore that
   -- sprite_xy_ram_wen :: E Bit <- not i_wr2_l `and` ena_6
@@ -222,23 +316,23 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
         db_reg <- GetReg db_reg
         pure (db_reg `index` 1, db_reg `index` 0)
 -}
-    char_hblank_reg <- GetReg char_hblank_reg
-    db_reg <- GetReg db_reg
-    xy <- mux char_hblank_reg YesNo { no = bits [i_flip, i_flip]
-                                    , yes = db_reg `slice` (1,0) }
+    --char_hblank_reg' <- GetReg char_hblank_reg
+    --db_reg' <- GetReg db_reg
+    xy <- mux char_hblank_reg' YesNo { no = bits [i_flip, i_flip]
+                                    , yes = db_reg' `slice` (1,0) }
     let [x,y] = split xy
     pure (x,y)
 
   -- p_char_addr_comb
   obj_on <- do
-    char_match_reg <- GetReg char_match_reg
-    char_match_reg `or` (i_hcnt `index` 8)
+    --char_match_reg' <- GetReg char_match_reg
+    char_match_reg' `or` (i_hcnt `index` 8)
 
   ca :: E B12 <- do
-    char_sum_reg <- GetReg char_sum_reg
-    char_hblank_reg <- GetReg char_hblank_reg
-    db_reg <- GetReg db_reg
-    let ca_11_6 = db_reg `slice` (7,2)
+    --char_sum_reg' <- GetReg char_sum_reg
+    --char_hblank_reg' <- GetReg char_hblank_reg
+    --db_reg' <- GetReg db_reg
+    let ca_11_6 = db_reg' `slice` (7,2)
 
     ca54 <- do
 {-
@@ -248,16 +342,16 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
           ca5 <- (char_sum_reg `index` 3) `xor` xflip
           pure $ bits [ca5, i_hcnt `index` 3]
 -}
-      ca5 <- (char_sum_reg `index` 3) `xor` xflip
-      mux (char_hblank_reg `isB` B0)
-        YesNo { yes = db_reg `slice` (1,0)
+      ca5 <- (char_sum_reg' `index` 3) `xor` xflip
+      mux (char_hblank_reg' `isB` B0)
+        YesNo { yes = db_reg' `slice` (1,0)
               , no = bits [ca5, i_hcnt `index` 3]
               }
 
     ca3 <- (i_hcnt `index` 2) `xor` yflip
-    ca2 <- (char_sum_reg `index` 2) `xor` xflip
-    ca1 <- (char_sum_reg `index` 1) `xor` xflip
-    ca0 <- (char_sum_reg `index` 0) `xor` xflip
+    ca2 <- (char_sum_reg' `index` 2) `xor` xflip
+    ca1 <- (char_sum_reg' `index` 1) `xor` xflip
+    ca0 <- (char_sum_reg' `index` 0) `xor` xflip
     pure (ca_11_6 & ca54 & bits [ca3,ca2,ca1,ca0])
 
   -- char roms
@@ -274,34 +368,34 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- p_char_data_mux
   cd :: E B8 <- do
-    char_hblank_reg <- GetReg char_hblank_reg
+    --char_hblank_reg' <- GetReg char_hblank_reg
     {-CaseBit char_hblank_reg >>= \case
       B0 -> pure char_rom_5e_dout
       B1 -> pure char_rom_5f_dout-}
-    mux char_hblank_reg YesNo { no = char_rom_5e_dout
+    mux char_hblank_reg' YesNo { no = char_rom_5e_dout
                               , yes = char_rom_5f_dout }
 
   -- p_char_shift_comb
   (shift_sel,shift_op) <- do
     ip <- (i_hcnt `index` 0) `and` (i_hcnt `index` 0)
-    vout_yflip <- GetReg vout_yflip
-    shift_regu <- GetReg shift_regu
-    shift_regl <- GetReg shift_regl
+    --vout_yflip' <- GetReg vout_yflip
+    --shift_regu' <- GetReg shift_regu
+    --shift_regl' <- GetReg shift_regl
     {-CaseBit vout_yflip >>= \case
       B0 -> pure (bits [b1,ip], bits [shift_regu `index` 3, shift_regl `index` 3])
       B1 -> pure (bits [ip,b1], bits [shift_regu `index` 0, shift_regl `index` 0])-}
-    shift_sel <- mux vout_yflip YesNo
+    shift_sel <- mux vout_yflip' YesNo
       { no = bits [b1,ip]
       , yes = bits [ip,b1] }
-    shift_op <- mux vout_yflip YesNo
-      { no = bits [shift_regu `index` 3, shift_regl `index` 3]
-      , yes = bits [shift_regu `index` 0, shift_regl `index` 0] }
+    shift_op <- mux vout_yflip' YesNo
+      { no = bits [shift_regu' `index` 3, shift_regl' `index` 3]
+      , yes = bits [shift_regu' `index` 0, shift_regl' `index` 0] }
     pure (shift_sel, shift_op)
 
 
   do -- p_char_shift
-    shift_regu' <- GetReg shift_regu
-    shift_regl' <- GetReg shift_regl
+    --shift_regu' <- GetReg shift_regu
+    --shift_regl' <- GetReg shift_regl
     if_ ena_6 $ do
       ite (shift_sel `index` 1) $ \case
         B0 -> do
@@ -332,8 +426,8 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- p_lut_4a_comb
   col_rom_addr <- do
-    vout_db <- GetReg vout_db
-    pure $ bits [b0] & vout_db & shift_op
+    --vout_db' <- GetReg vout_db
+    pure $ bits [b0] & vout_db' & shift_op
 
   -- col_rom_4a
   lut_4a <- do
@@ -342,9 +436,9 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
   -- p_cntr_ld
   cntr_ld <- do
     ena <- i_hcnt `slice` (3,0) `isV` [B0,B1,B1,B1]
-    vout_obj_on <- GetReg vout_obj_on
-    vout_hblank <- GetReg vout_hblank
-    c <- vout_hblank `or` not vout_obj_on
+    --vout_obj_on' <- GetReg vout_obj_on
+    --vout_hblank' <- GetReg vout_hblank
+    c <- vout_hblank' `or` not vout_obj_on'
     ena `and` c
 
   do -- p_ra_cnt
@@ -354,13 +448,13 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
           SetReg ra dr
         B0 -> do
           incremented <- do
-            ra <- GetReg ra
-            Plus ra byte1
+            --ra' <- GetReg ra
+            Plus ra' byte1
           SetReg ra incremented
 
   sprite_ram_addr :: E B12 <- do
-    ra <- GetReg ra
-    pure $ bits [b0,b0,b0,b0] & ra
+    --ra' <- GetReg ra
+    pure $ bits [b0,b0,b0,b0] & ra'
 
   -- dont care about the write side of the sprite ram
   -- let _ = (sprite_ram_ip, sprite_ram_addr_t1, vout_obj_on_t1)
@@ -386,23 +480,23 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- p_sprite_ram_op_comb
   sprite_ram_reg :: E B4 <- do
-    vout_obj_on_t1 <- GetReg vout_obj_on_t1
+    --vout_obj_on_t1' <- GetReg vout_obj_on_t1
     {-CaseBit vout_obj_on_t1 >>= \case
       B1 -> pure sprite_ram_op
       B0 -> pure nibble0-}
-    mux vout_obj_on_t1 YesNo { yes = sprite_ram_op, no = nibble0 }
+    mux vout_obj_on_t1' YesNo { yes = sprite_ram_op, no = nibble0 }
 
   -- p_video_op_sel_comb
   video_op_sel :: E Bit <- do
     not <$> sprite_ram_reg `isV` [B0,B0,B0,B0]
 
   do -- p_sprite_ram_ip_reg
-    vout_obj_on <- GetReg vout_obj_on
-    vout_hblank <- GetReg vout_hblank
+    --vout_obj_on' <- GetReg vout_obj_on
+    --vout_hblank' <- GetReg vout_hblank
     if_ ena_6 $ do
       sprite_ram_addr_t1 <= sprite_ram_addr
-      vout_obj_on_t1 <= vout_obj_on
-      vout_hblank_t1 <= vout_hblank
+      vout_obj_on_t1 <= vout_obj_on'
+      vout_hblank_t1 <= vout_hblank'
       lut_4a_t1 <= lut_4a
 
   -- Dont need to drive the write side of the sprite RAM
@@ -411,8 +505,8 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- p_video_op_comb
   final_col :: E B4 <- do
-    vout_hblank <- GetReg vout_hblank
-    cond <- vout_hblank `or` i_vblank
+    --vout_hblank' <- GetReg vout_hblank
+    cond <- vout_hblank' `or` i_vblank
     {-CaseBit cond >>= \case
       B1 -> pure nibble0
       B0 -> do
@@ -433,10 +527,10 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   --  assign outputs
   do
-    video_out <- GetReg video_out
-    let o_blue = video_out `slice` (7,6)
-    let o_green = video_out `slice` (5,3)
-    let o_red = video_out `slice` (2,0)
+    --video_out' <- GetReg video_out
+    let o_blue = video_out' `slice` (7,6)
+    let o_green = video_out' `slice` (5,3)
+    let o_red = video_out' `slice` (2,0)
     pure Outputs { o_red, o_green, o_blue }
 
 
@@ -484,11 +578,15 @@ isB e = \case
   B1 -> e
 
 allBitsSet :: [E Bit] -> Eff (E Bit) -- TODO: should have a built-in oper for this
-allBitsSet = \case
+{-allBitsSet = \case
   [] -> pure b1
   x:xs -> do
     y <- allBitsSet xs
-    x `and ` y
+    x `and ` y-}
+allBitsSet xs = isZero (combine (map not xs))
+
+isZero :: E [Bit] -> Eff (E Bit)
+isZero = IsZero
 
 zipChecked :: [a] -> [b] -> [(a,b)]
 zipChecked xs ys = do
@@ -556,12 +654,12 @@ type B8 = [Bit]
 type B9 = [Bit]
 type B12 = [Bit]
 
-increment :: Reg [Bit] -> Eff ()
+{-increment :: Reg [Bit] -> Eff ()
 increment reg = do
   reg' <- do
     reg <- GetReg reg
     Plus reg (eSized 9 1) -- TODO: compute this size from reg?
-  reg <= reg'
+  reg <= reg'-}
 
 ----------------------------------------------------------------------
 
@@ -570,72 +668,84 @@ data VideoTimingRegs = VideoTimingRegs
   , vcnt :: Reg B9
   , hblank :: Reg Bit
   , vblank :: Reg Bit
-  , hsync :: Reg Bit
+--  , hsync :: Reg Bit
   }
 
 withVideoTimingRegs :: (VideoTimingRegs -> System) -> System
 withVideoTimingRegs f = do
-  DeclareReg (Size 9) $ \hcnt -> do
-  DeclareReg (Size 9) $ \vcnt -> do
-  DeclareReg1 $ \hblank -> do
-  DeclareReg1 $ \vblank -> do
-  DeclareReg1 $ \hsync -> do
-  f VideoTimingRegs { hcnt, vcnt, hblank, vblank, hsync }
+  DeclareReg "hcnt" (Size 9) $ \hcnt -> do
+  DeclareReg "vcnt" (Size 9) $ \vcnt -> do
+  DeclareReg1 "hblank" $ \hblank -> do
+  DeclareReg1 "vblank" $ \vblank -> do
+--  DeclareReg1 $ \hsync -> do
+  f VideoTimingRegs { hcnt, vcnt, hblank, vblank } --, hsync }
 
 -- | stuff derived from 'pacman.vhd'
 video_timing :: VideoTimingRegs -> E Bit -> Eff ()
 video_timing VideoTimingRegs{..} ena_6 = do
 
+  hcnt' <- GetReg hcnt
+  vcnt' <- GetReg vcnt
+
   do_hsync <- do
-    hcnt <- GetReg hcnt
-    hcnt `isV` sizedNat (Size 9) 0xAF
+    hcnt' `isV` sizedNat (Size 9) 0xAF
 
   do -- p_hvcnt
     if_ ena_6 $ do
       hcarry <- do
-        hcnt <- GetReg hcnt
-        allBitsSet (split hcnt)
+        --hcnt <- GetReg hcnt
+        allBitsSet (split hcnt')
 
       ite hcarry $ \case
         B1 -> hcnt <= eSized (Size 9) 0x080
-        B0 -> increment hcnt
+        B0 -> do
+          --increment hcnt
+          hcnt1 <- Plus hcnt' (eSized 9 1)
+          hcnt <= hcnt1
 
       vcarry <- do
-        vcnt <- GetReg vcnt
-        allBitsSet (split vcnt)
+        --vcnt <- GetReg vcnt
+        allBitsSet (split vcnt')
 
       if_ do_hsync $ do
         ite vcarry $ \case
           B1 -> do
             vcnt <= eSized (Size 9) 0xF8
           B0 -> do
-            increment vcnt
+            --increment vcnt
+            vcnt1 <- Plus vcnt' (eSized 9 1)
+            vcnt <= vcnt1
 
   do -- p_sync
-    hcnt <- GetReg hcnt
+    --hcnt <- GetReg hcnt
     if_ ena_6 $ do
 
-      hcnt `isV` sizedNat 9 0x08F >>= CaseBit >>= \case
-        B1 -> hblank <= b1
-        B0 -> do
-          hcnt `isV` sizedNat 9 0x0EF >>= CaseBit >>= \case
-            B1 -> hblank <= b0
-            B0 -> pure ()
+      do
+        c1 <- hcnt' `isV` sizedNat 9 0x08F
+        ite c1 $ \case
+          B1 -> hblank <= b1
+          B0 -> do
+            c0 <- hcnt' `isV` sizedNat 9 0x0EF
+            ite c0 $ \case
+              B1 -> hblank <= b0
+              B0 -> pure ()
 
-      CaseBit do_hsync >>= \case
-        B1 -> hsync <= b1
-        B0 -> do
-          hcnt `isV` sizedNat 9 0x0CF >>= CaseBit >>= \case
-            B1 -> hsync <= b0
-            B0 -> pure ()
+      do
+{-        ite do_hsync $ \case
+          B1 -> hsync <= b1
+          B0 -> do
+            c0 <- hcnt' `isV` sizedNat 9 0x0CF
+            ite c0 $ \case
+              B1 -> hsync <= b0
+              B0 -> pure () -}
 
       if_ do_hsync $ do
-        vcnt <- GetReg vcnt
-        c1 <- vcnt `isV` sizedNat 9 0x1EF
+        --vcnt <- GetReg vcnt
+        c1 <- vcnt' `isV` sizedNat 9 0x1EF
         ite c1 $ \case
           B1 -> do vblank <= b1
           B0 -> do
-            c0 <- vcnt `isV` sizedNat 9 0x10F
+            c0 <- vcnt' `isV` sizedNat 9 0x10F
             ite c0 $ \case
               B1 -> do vblank <= b0
               B0 -> do pure ()

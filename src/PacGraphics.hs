@@ -111,7 +111,7 @@ seeTiles mac = do
   sequence_
     [ do
         let xoff = 30
-        let yoff = 100
+        let yoff = 80
         let i = 16*y + x
         let xy = XY { x = nat8 (xoff + 10*x), y = nat9 (yoff + 10*y) }
         tile <- readTile mac (TI (nat8 i))
@@ -128,7 +128,7 @@ seeSprites mac = do
   sequence_
     [ do
         let xoff = 30
-        let yoff = 105
+        let yoff = 80
         let i = 8*y + x
         let xy = XY { x = nat8 (xoff + 20*x), y = nat9 (yoff + 20*y) }
         sprite <- readSprite mac (SI (nat8 i))

@@ -20,14 +20,17 @@ main :: Code -> IO ()
 main code = do
   let! _ = keyMapTable
   SDL.initializeAll
-  let sf = 3
-  let screenW = 8 * (28 + 2) -- +2 to give a tile width border in Grey (for dev)
-  let screenH = 8 * (36 + 2)
-  let windowSize = V2 (sf * screenW) (sf * screenH)
+
+  let sf = 1
+  let offset = 8
+  let screenW = 512 --(8*28)
+  let screenH = 512 --(8*36)
+
+  let windowSize = V2 (sf * (2*offset + screenW)) (sf * (2*offset + screenH))
   let winConfig = SDL.defaultWindow { SDL.windowInitialSize = windowSize }
   win <- SDL.createWindow (Text.pack "PacMan") $ winConfig
   renderer <- SDL.createRenderer win (-1) SDL.defaultRenderer
-  let assets = DrawAssets { renderer, sf }
+  let assets = DrawAssets { renderer, sf, offset }
   (context,state,prog) <- Code.init code
   let keys = Keys { pressed = Set.empty }
   let world0 = World { state, keys, frame = 0 }
@@ -100,6 +103,7 @@ keyMapTable = Map.fromList ys
 data DrawAssets = DrawAssets
   { renderer :: Renderer
   , sf :: CInt
+  , offset :: CInt
   }
 
 drawEverything :: DrawAssets -> Picture -> IO ()
@@ -110,15 +114,16 @@ drawEverything assets@DrawAssets{renderer=r} picture = do
   SDL.present r
 
 renderPicture :: DrawAssets -> Picture  -> IO ()
-renderPicture DrawAssets{renderer=r,sf} = traverse
+renderPicture DrawAssets{renderer=r,sf,offset} = traverse
   where
     traverse :: Picture -> IO ()
     traverse = \case
       Pictures pics -> mapM_ traverse pics
       Draw (XY{x,y}) rgb -> do
+        --putStrLn (show ("pixel",(x,y),rgb))
         setColor r rgb
-        let x' = sf * fromIntegral x
-        let y' = sf * fromIntegral y
+        let x' = sf * (fromIntegral x + offset)
+        let y' = sf * (fromIntegral y + offset)
         let rect = SDL.Rectangle (SDL.P (V2 x' y')) (V2 sf sf)
         SDL.fillRect r (Just rect)
 

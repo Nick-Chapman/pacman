@@ -20,8 +20,8 @@ instance Monad Eff where return = Ret; (>>=) = Bind
 data System
   = FrameEffect (Eff ())
   | DeclareRom RomSpec (RomId -> System)
-  | DeclareReg1 (Reg Bit -> System)
-  | DeclareReg Size (Reg [Bit] -> System)
+  | DeclareReg1 String (Reg Bit -> System)
+  | DeclareReg String Size (Reg [Bit] -> System)
   | DeclareRam Size (RamId -> System)
 
 -- the core effect type
@@ -30,12 +30,14 @@ data Eff a where
   Bind :: Eff a -> (a -> Eff b) -> Eff b
   Repeat :: Int -> Eff () -> Eff ()
   CaseBit :: E Bit -> Eff Bit
+  Trace :: String -> E Nat -> Eff ()
   SetPixel :: XY (E Nat) -> RGB (E Nat) -> Eff ()
   GetReg :: Reg a -> Eff (E a)
   SetReg :: Show a => Reg a -> E a -> Eff ()
   And :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
   Minus :: E Nat -> E Nat -> Eff (E Nat)
+  IsZero :: E Nat -> Eff (E Bit)
   Mux :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
   ReadRam :: RamId -> E Nat -> Eff (E Nat)
@@ -45,7 +47,7 @@ data Eff a where
 data ES = ES -- elaboration state
   { regId :: RegId
   , ramId :: RamId
-  , regs :: [(RegId,Size)]
+  , regs :: [(RegId,Size,String)]
   , romId :: RomId
   , romSpecs :: [(RomId,RomSpec)]
   , ramDecs :: [(RamId,Size)]
@@ -63,13 +65,13 @@ elaborate Conf{specializeRoms} = loop es0
     loop es@ES{regId,ramId,regs,romId,romSpecs,ramDecs} = \case
       DeclareRom spec f -> do
         loop es { romId = romId + 1, romSpecs = (romId,spec) : romSpecs } (f romId)
-      DeclareReg size f -> do
+      DeclareReg name size f -> do
         let reg = Reg size regId
-        loop es { regId = regId + 1, regs = (regId,size) : regs } (f reg)
-      DeclareReg1 f -> do
+        loop es { regId = regId + 1, regs = (regId,size,name) : regs } (f reg)
+      DeclareReg1 name f -> do
         let size = Size { size = 1 }
         let reg = Reg1 regId
-        loop es { regId = regId + 1, regs = (regId,size) : regs } (f reg)
+        loop es { regId = regId + 1, regs = (regId,size,name) : regs } (f reg)
       DeclareRam size f -> do
         loop es { ramId = ramId + 1, ramDecs = (ramId,size) : ramDecs } (f ramId)
       FrameEffect eff -> do
@@ -150,6 +152,7 @@ compile0 roms eff0 = do
             doProg p1 (doProg p2 (k s3 ()))-}
 
       SetPixel xy rgb -> doStep (S_SetPixel xy rgb) (k s ())
+      Trace tag e -> doStep (S_Trace tag e) (k s ())
 
       CaseBit bit -> do -- DONT USE ME, I BLOW UP
         case bit of
@@ -197,6 +200,11 @@ compile0 roms eff0 = do
             let oper = O_Minus e1 e2
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
+
+      IsZero e -> do
+        let oper = O_IsZero e
+        share1 s oper $ \s tmp ->
+          k s (E_Tmp tmp)
 
       Mux sel yes no -> do
         case sel of

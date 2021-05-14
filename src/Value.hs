@@ -2,7 +2,7 @@ module Value (
   XY(..), RGB(..), Key(..), Nat, Bit(..),
   Size(..),
   checkSize, isBit1, andBit, notBit, indexBits,
-  sizedNat, nat2int, plusNat, minusNat, sizeOfNat,
+  sizedNat, nat2int, plusNat, minusNat, sizeOfNat, isZeroNat,
   ) where
 
 data Key
@@ -82,3 +82,6 @@ minusNat x y = do
   let ny = length y
   let n = max nx ny
   drop 1 $ sizedNat (Size (n+1)) (nat2int x - nat2int y) -- ???
+
+isZeroNat :: Nat -> Bit
+isZeroNat n = if nat2int n == 0 then B1 else B0
