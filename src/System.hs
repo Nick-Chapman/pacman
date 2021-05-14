@@ -29,7 +29,7 @@ data Eff a where
   Ret :: a -> Eff a
   Bind :: Eff a -> (a -> Eff b) -> Eff b
   Repeat :: Int -> Eff () -> Eff ()
-  CaseBit :: E Bit -> Eff Bit
+  --CaseBit :: E Bit -> Eff Bit
   Trace :: String -> E Nat -> Eff ()
   SetPixel :: XY (E Nat) -> RGB (E Nat) -> Eff ()
   GetReg :: Reg a -> Eff (E a)
@@ -38,7 +38,7 @@ data Eff a where
   Plus :: E Nat -> E Nat -> Eff (E Nat)
   Minus :: E Nat -> E Nat -> Eff (E Nat)
   IsZero :: E Nat -> Eff (E Bit)
-  Mux :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
+  Mux :: E Bit -> YN (E [Bit])-> Eff (E [Bit])
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
   ReadRam :: RamId -> E Nat -> Eff (E Nat)
   WriteRam :: RamId -> E Nat -> E Nat -> Eff ()
@@ -154,14 +154,14 @@ compile0 roms eff0 = do
       SetPixel xy rgb -> doStep (S_SetPixel xy rgb) (k s ())
       Trace tag e -> doStep (S_Trace tag e) (k s ())
 
-      CaseBit bit -> do -- DONT USE ME, I BLOW UP
+      {-CaseBit bit -> do -- DONT USE ME, I BLOW UP
         case bit of
           E_Lit _ B1 -> k s B1
           E_Lit _ B0 -> k s B0
           _ -> do
             let (s1,p1) = k s B1
             let (s2,p2) = k s1 B1
-            (s2, P_If bit p1 p2)
+            (s2, P_If bit p1 p2)-}
 
       SetReg (Reg1 rid) exp ->
         k s { regs1 = Map.insert rid exp regs1 } ()
@@ -187,7 +187,7 @@ compile0 roms eff0 = do
         case (trySimpPlus (e1,e2)) of
           Just e -> k s e
           Nothing -> do
-            let size = max (sizeE e1) (sizeE e2)
+            let size = ensureSameSize (sizeE e1) (sizeE e2)
             let oper = O_Plus e1 e2
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
@@ -196,7 +196,7 @@ compile0 roms eff0 = do
         case (trySimpPlus (e1,e2)) of
           Just e -> k s e
           Nothing -> do
-            let size = max (sizeE e1) (sizeE e2)
+            let size = ensureSameSize (sizeE e1) (sizeE e2)
             let oper = O_Minus e1 e2
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
@@ -206,13 +206,13 @@ compile0 roms eff0 = do
         share1 s oper $ \s tmp ->
           k s (E_Tmp tmp)
 
-      Mux sel yes no -> do
+      Mux sel yn@YN{yes,no} -> do
         case sel of
           E_Lit _ B1 -> k s yes
           E_Lit _ B0 -> k s no
           _ -> do
-            let size = max (sizeE yes) (sizeE no)
-            let oper = O_Mux sel yes no
+            let size = ensureSameSize (sizeE yes) (sizeE no)
+            let oper = O_Mux sel yn
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
 
@@ -237,6 +237,10 @@ compile0 roms eff0 = do
 
       WriteRam id a b -> do
         doStep (S_WriteRam id a b) (k s ())
+
+
+ensureSameSize :: Size -> Size -> Size
+ensureSameSize z1 z2 = if z1 == z2 then z1 else error (show ("ensureSameSize",z1,z2))
 
 share1 :: CS -> Oper Bit -> (CS -> Tmp Bit -> Res) -> Res
 share1 s@CS{u} oper k = do

@@ -365,7 +365,7 @@ decodeAsRGB w = do
 -- class Muxable, or muxable for any functor?
 
 muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
-muxBits = Mux
+muxBits sel yes no = Mux sel YN {yes,no}
 _muxBits :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
 _muxBits sel yes no = do
   let ys = split yes

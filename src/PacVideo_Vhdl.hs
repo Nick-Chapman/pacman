@@ -99,7 +99,7 @@ runForallPixels :: Registers -> VideoTimingRegs -> Eff () -> Eff ()
 
 runForallPixels Registers{} VideoTimingRegs{} eff = do
   --vcnt <= eSized 9 0x10F
-  Repeat 40000 $ do
+  Repeat 10000 $ do
     eff
 
 
@@ -124,7 +124,7 @@ decodeAsRGB w = do
     bit :: Int -> Int -> Eff (E Nat)
     bit i v = do
       let c = w `index` i
-      Mux c (nat8 v) (nat8 0)
+      Mux c YN{ yes = nat8 v, no = nat8 0 }
   r <- do
     x <- bit 0 0x21
     y <- bit 1 0x47
@@ -289,8 +289,8 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
     {-CaseBit i_hblank >>= \case
       B1 -> pure $ notV sprite_xy_ram_temp
       B0 -> pure $ bits (replicate 8 b1)-}
-    mux i_hblank
-      YesNo { yes = notV sprite_xy_ram_temp
+    Mux i_hblank
+      YN { yes = notV sprite_xy_ram_temp
             , no = bits (replicate 8 b1) }
 
   do -- p_char_regs
@@ -318,7 +318,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 -}
     --char_hblank_reg' <- GetReg char_hblank_reg
     --db_reg' <- GetReg db_reg
-    xy <- mux char_hblank_reg' YesNo { no = bits [i_flip, i_flip]
+    xy <- Mux char_hblank_reg' YN { no = bits [i_flip, i_flip]
                                     , yes = db_reg' `slice` (1,0) }
     let [x,y] = split xy
     pure (x,y)
@@ -343,8 +343,8 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
           pure $ bits [ca5, i_hcnt `index` 3]
 -}
       ca5 <- (char_sum_reg' `index` 3) `xor` xflip
-      mux (char_hblank_reg' `isB` B0)
-        YesNo { yes = db_reg' `slice` (1,0)
+      Mux (char_hblank_reg' `isB` B0)
+        YN { yes = db_reg' `slice` (1,0)
               , no = bits [ca5, i_hcnt `index` 3]
               }
 
@@ -359,12 +359,12 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
   char_rom_5e_dout :: E B8 <- do
     --CaseBit ena_6 >>= \case B1 -> ReadRomByte char_rom_5e ca; B0 -> pure byte0
     read <- ReadRomByte char_rom_5e ca
-    mux ena_6 YesNo{ yes = read, no = byte0 }
+    Mux ena_6 YN{ yes = read, no = byte0 }
 
   char_rom_5f_dout :: E B8 <- do
     --CaseBit ena_6 >>= \case B1 -> ReadRomByte char_rom_5f ca; B0 -> pure byte0
     read <- ReadRomByte char_rom_5f ca
-    mux ena_6 YesNo{ yes = read, no = byte0 }
+    Mux ena_6 YN{ yes = read, no = byte0 }
 
   -- p_char_data_mux
   cd :: E B8 <- do
@@ -372,7 +372,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
     {-CaseBit char_hblank_reg >>= \case
       B0 -> pure char_rom_5e_dout
       B1 -> pure char_rom_5f_dout-}
-    mux char_hblank_reg' YesNo { no = char_rom_5e_dout
+    Mux char_hblank_reg' YN { no = char_rom_5e_dout
                               , yes = char_rom_5f_dout }
 
   -- p_char_shift_comb
@@ -384,10 +384,10 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
     {-CaseBit vout_yflip >>= \case
       B0 -> pure (bits [b1,ip], bits [shift_regu `index` 3, shift_regl `index` 3])
       B1 -> pure (bits [ip,b1], bits [shift_regu `index` 0, shift_regl `index` 0])-}
-    shift_sel <- mux vout_yflip' YesNo
+    shift_sel <- Mux vout_yflip' YN
       { no = bits [b1,ip]
       , yes = bits [ip,b1] }
-    shift_op <- mux vout_yflip' YesNo
+    shift_op <- Mux vout_yflip' YN
       { no = bits [shift_regu' `index` 3, shift_regl' `index` 3]
       , yes = bits [shift_regu' `index` 0, shift_regl' `index` 0] }
     pure (shift_sel, shift_op)
@@ -468,7 +468,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
         B0 -> pure nibble0
 -}
       read <- ReadRam sprite_ram a
-      mux ena_6 YesNo{ yes = read, no = nibble0 }
+      Mux ena_6 YN{ yes = read, no = nibble0 }
     let s = sprite_ram_addr `index` 0
     -- TODO: which way around are the nibbles addressed by the LSB ?
 {-
@@ -476,7 +476,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
       B1 -> pure $ b `slice` (7,4)
       B0 -> pure $ b `slice` (3,0)
 -}
-    mux s YesNo { yes = b `slice` (7,4), no = b `slice` (3,0) }
+    Mux s YN { yes = b `slice` (7,4), no = b `slice` (3,0) }
 
   -- p_sprite_ram_op_comb
   sprite_ram_reg :: E B4 <- do
@@ -484,7 +484,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
     {-CaseBit vout_obj_on_t1 >>= \case
       B1 -> pure sprite_ram_op
       B0 -> pure nibble0-}
-    mux vout_obj_on_t1' YesNo { yes = sprite_ram_op, no = nibble0 }
+    Mux vout_obj_on_t1' YN { yes = sprite_ram_op, no = nibble0 }
 
   -- p_video_op_sel_comb
   video_op_sel :: E Bit <- do
@@ -513,9 +513,9 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
         CaseBit video_op_sel >>= \case
           B1 -> pure sprite_ram_reg
           B0 -> pure $ lut_4a `slice` (3,0)-}
-    v <- mux video_op_sel YesNo { yes = sprite_ram_reg
+    v <- Mux video_op_sel YN { yes = sprite_ram_reg
                                 , no = lut_4a `slice` (3,0) }
-    mux cond YesNo { yes = nibble0 , no = v }
+    Mux cond YN { yes = nibble0 , no = v }
 
   -- col_rom_7f
   lut_7f :: E B8 <- do
@@ -618,12 +618,6 @@ xor x y = do
 
 notV :: E [Bit] -> E [Bit]
 notV = combine . map not . split
-
-
-data YesNo a = YesNo { yes :: a, no :: a }
-
-mux :: E Bit -> YesNo (E [Bit]) -> Eff (E [Bit])
-mux sel YesNo{yes,no} = Mux sel yes no
 
 ----------------------------------------------------------------------
 -- other opps
@@ -949,8 +943,8 @@ end;
 
 x74_157 :: E Bit -> E Bit -> E B4 -> E B4 -> Eff (E B4)
 x74_157 s g a b = do
-  res <- Mux s b a
-  Mux g nibble0 res
+  res <- Mux s YN {yes = b, no = a}
+  Mux g YN{ yes = nibble0, no = res }
 
 {-
 architecture RTL of X74_157 is
@@ -986,7 +980,7 @@ end;
 x74_257 :: E Bit -> E B4 -> E B4 -> Eff (E B4)
 x74_257 s a b = do
   -- Uses a register below. Can we forget this
-  Mux s b a
+  Mux s YN { yes = b, no = a }
 {-
 
 architecture RTL of X74_257 is

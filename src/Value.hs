@@ -1,5 +1,5 @@
 module Value (
-  XY(..), RGB(..), Key(..), Nat, Bit(..),
+  YN(..), XY(..), RGB(..), Key(..), Nat, Bit(..),
   Size(..),
   checkSize, isBit1, andBit, notBit, indexBits,
   sizedNat, nat2int, plusNat, minusNat, sizeOfNat, isZeroNat,
@@ -15,6 +15,7 @@ data Key
   | KeyX
   deriving (Eq,Ord,Enum,Bounded,Show)
 
+data YN a = YN { yes :: a, no :: a }
 data Bit = B0 | B1   deriving (Generic,NFData)
 type Nat = [Bit] -- MSB first (like all bit lists)
 data XY a = XY { x :: a, y :: a } deriving (Eq,Ord,Functor,Generic,NFData)

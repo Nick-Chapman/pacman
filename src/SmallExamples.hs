@@ -53,7 +53,7 @@ incXY (rx,ry) = do
   SetReg rx x'
   carry <- allBitsSet (split x)
   y1 <- Plus y one
-  y' <- Mux carry y1 y
+  y' <- Mux carry YN{yes = y1, no = y}
   SetReg ry y'
 
 allBitsSet :: [E Bit] -> Eff (E Bit)
@@ -182,7 +182,7 @@ _switch sel yes no = do
 -- | type is less general, fixed to 'E [Bit]'. Could it be 'E a' ?
 switch :: E Bit -> E [Bit] -> E [Bit] -> Eff (E [Bit])
 switch sel yes no = do
-  Mux sel yes no
+  Mux sel YN {yes,no}
 
 addXY :: XY (E Nat) -> XY (E Nat) -> Eff (XY (E Nat))
 addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
