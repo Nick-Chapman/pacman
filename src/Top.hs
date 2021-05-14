@@ -8,6 +8,8 @@ import qualified PacGraphics (tiles,screen)
 import qualified SmallExamples (square,cols)
 import qualified System (Conf(..),elaborate)
 import qualified PacVideo_Vhdl (theVideoSystem)
+import Data.Map.Strict (Map)
+import qualified Data.Map as Map
 
 main :: IO ()
 main = do
@@ -17,20 +19,33 @@ main = do
 
 data Mode = Mode Conf
 data Conf = Conf
-  { example :: System
-  , pic :: Bool -- draw the picture (i.e. run the emulator) as well as code-gen
-  , accpix :: Bool  -- acculate pixels from frame to frame
-  , specializeRoms :: Bool -- load roms at code-gen time to allow specialization
+  { name :: String -- name of the system
+  , system :: System -- definition
+  , pic :: Bool -- draw the picture? (i.e. run the emulator) as well as code-gen
+  , accpix :: Bool  -- acculate pixels from frame to frame?
+  , specializeRoms :: Bool -- load roms at code-gen time to allow specialization?
   }
 
+examples :: Map String System
+examples = Map.fromList
+  [ ("cols"      , SmallExamples.cols)
+  , ("square"    , SmallExamples.square)
+  , ("tiles"     , PacGraphics.tiles)
+  , ("screen"    , PacGraphics.screen)
+  , ("vhdl"      , PacVideo_Vhdl.theVideoSystem)
+  ]
+
 parseArgs :: [String] -> Mode
-parseArgs = do
+parseArgs args = do
+  let name = "cols" -- default
+  let Just system = Map.lookup name examples
   loop Conf
-    { example = SmallExamples.cols
+    { name
+    , system
     , pic = True
     , accpix = False
     , specializeRoms = False -- default slow
-    }
+    } args
   where
     loop :: Conf -> [String] -> Mode
     loop conf = \case
@@ -39,20 +54,16 @@ parseArgs = do
       "accpix":xs -> loop conf { accpix = True } xs
       "slow":xs -> loop conf { specializeRoms = False } xs
       "quick":xs -> loop conf { specializeRoms = True } xs
-
-      "cols":xs -> loop conf { example = SmallExamples.cols } xs
-      "square":xs -> loop conf { example = SmallExamples.square } xs
-      "tiles":xs -> loop conf { example = PacGraphics.tiles } xs
-      "screen":xs -> loop conf { example = PacGraphics.screen } xs
-      "vhdl":xs -> loop conf { example = PacVideo_Vhdl.theVideoSystem } xs
-
-      xs -> error (show ("parseArgs",xs))
+      name:xs ->
+        case Map.lookup name examples of
+          Nothing -> error (show ("parseArgs",name))
+          Just system -> loop conf { name, system } xs
 
 run :: Conf -> IO ()
-run Conf{example,pic,accpix,specializeRoms} = do
+run Conf{name,system,pic,accpix,specializeRoms} = do
   putStrLn "*rethinking emulation types*"
-  code <- System.elaborate System.Conf { specializeRoms } example
-  generateFile "small" code
+  code <- System.elaborate System.Conf { specializeRoms } system
+  generateFile name code
   when pic $ EmulateWithSdl.main code accpix
   pure ()
 

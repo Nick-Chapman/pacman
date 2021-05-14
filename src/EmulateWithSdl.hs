@@ -39,10 +39,10 @@ main code accpix = do
   let
     loop :: World -> IO ()
     loop World{state,keys,frame} = do
-      putStrLn $ "frame: " ++ show frame ++ ", emulating..."
+      --putStrLn $ "frame: " ++ show frame ++ ", emulating..."
       x <- Code.runForOneFrame prog context state keys
       let! (picture,state) = x `deepseq` x
-      putStrLn $ "frame: " ++ show frame ++ ", emulating...done"
+      --putStrLn $ "frame: " ++ show frame ++ ", emulating...done"
       drawEverything assets picture
       events <- SDL.pollEvents
       let interesting = [ i | e <- events, i <- interestingOf e ]
