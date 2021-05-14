@@ -1,12 +1,14 @@
-
 module Ram (Ram,init,read,write) where
 
+import Control.DeepSeq (NFData)
 import Data.Map (Map)
 import Data.Word (Word8)
+import GHC.Generics (Generic)
 import Prelude hiding (init,read)
 import qualified Data.Map.Strict as Map
 
 data Ram = Ram { size :: Int, m :: Map Int Word8 }
+  deriving (Generic,NFData)
 
 init :: Int -> Ram
 init size = Ram { size, m = Map.empty }

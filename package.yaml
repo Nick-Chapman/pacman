@@ -18,6 +18,7 @@ dependencies:
 - clock
 - containers
 - containers
+- deepseq
 - extra
 - haskeline
 - mtl
@@ -31,7 +32,10 @@ dependencies:
 
 default-extensions:
 - BangPatterns
+- DeriveAnyClass
 - DeriveFunctor
+- DeriveGeneric
+- DerivingStrategies
 - DuplicateRecordFields
 - EmptyCase
 - FlexibleContexts

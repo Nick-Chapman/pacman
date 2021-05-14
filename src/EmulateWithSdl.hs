@@ -2,6 +2,7 @@ module EmulateWithSdl (main) where
 
 import Code (Code,State,Keys(..),Picture(..))
 import Control.Concurrent (threadDelay)
+import Control.DeepSeq (deepseq)
 import Data.List.Extra (groupSort)
 import Data.Map (Map)
 import Foreign.C.Types (CInt)
@@ -37,8 +38,10 @@ main code = do
   let
     loop :: World -> IO ()
     loop World{state,keys,frame} = do
-      putStrLn $ "frame: " ++ show frame
-      (picture,state) <- Code.runForOneFrame prog context state keys
+      putStrLn $ "frame: " ++ show frame ++ ", emulating..."
+      x <- Code.runForOneFrame prog context state keys
+      putStrLn $ "frame: " ++ show frame ++ ", emulating...done"
+      let (picture,state) = x `deepseq` x
       drawEverything assets picture
       events <- SDL.pollEvents
       let interesting = [ i | e <- events, i <- interestingOf e ]

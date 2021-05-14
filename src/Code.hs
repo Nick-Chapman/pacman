@@ -6,16 +6,18 @@ module Code (
   init, Context, State, runForOneFrame, Keys(..), Picture(..),
   ) where
 
+import Control.DeepSeq (NFData(..))
 import Data.Map (Map)
 import Data.Set (Set)
+import GHC.Generics (Generic)
 import Prelude hiding (init)
-import Rom (Rom)
 import Ram (Ram)
+import Rom (Rom)
 import Text.Printf (printf)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import qualified Rom (load,lookup)
 import qualified Ram (init,read,write)
+import qualified Rom (load,lookup)
 
 import Value
 
@@ -26,6 +28,7 @@ data Code = Code
   , romSpecs :: [(RomId,RomSpec)]
   , entry :: Prog
   }
+  deriving (Generic,NFData)
 
 -- statement in the generated program, works in context of some decs
 data Prog where
@@ -34,6 +37,7 @@ data Prog where
   P_Step :: Step -> Prog
   P_If :: E Bit -> Prog -> Prog -> Prog
   P_Repeat :: Int -> Prog -> Prog
+  deriving (Generic,NFData)
 
 -- basic program step (statement), which is sequenced in a program
 data Step where
@@ -42,6 +46,8 @@ data Step where
   S_SetReg :: Show a => Reg a -> E a -> Step
   S_SetPixel :: XY (E Nat) -> RGB (E Nat) -> Step
   S_Trace :: String -> E Nat -> Step
+
+instance NFData Step where rnf = undefined -- TODO: why is this ok?
 
 -- operation (non atomic/pure expression), will always be let-bound
 -- these things MUST be name
@@ -67,6 +73,8 @@ data E a where
   E_TmpIndexed :: Tmp [Bit] -> Int -> E Bit
   E_Combine :: [E Bit] -> E [Bit]
 
+instance NFData (E a) where rnf = undefined -- TODO: why is this ok?
+
 -- TODO: break E into two levels E/A, with no recursion in E for Concat etc
 
 eNot :: E Bit -> E Bit
@@ -85,11 +93,12 @@ data Tmp a where
   Tmp1 :: TmpId -> Tmp Bit
 
 data RomSpec = RomSpec { path :: String, size :: Int }
+  deriving (Generic,NFData)
 
-newtype RegId = RegId { u :: Int } deriving (Eq,Ord,Num)
+newtype RegId = RegId { u :: Int } deriving newtype (Eq,Ord,Num,NFData)
 newtype TmpId = TmpId { u :: Int } deriving (Eq,Ord)
-newtype RomId = RomId { u :: Int } deriving (Eq,Ord,Num)
-newtype RamId = RamId { u :: Int } deriving (Eq,Ord,Num)
+newtype RomId = RomId { u :: Int } deriving newtype (Eq,Ord,Num,NFData)
+newtype RamId = RamId { u :: Int } deriving newtype (Eq,Ord,Num,NFData)
 
 data Context = Context
   { roms :: Map RomId Rom
@@ -100,12 +109,14 @@ data State = State
   { regs :: Map RegId [Bit]
   , rams :: Map RamId Ram
   }
+  deriving (Generic,NFData)
 
 newtype Keys = Keys { pressed :: Set Key }
 
 data Picture where
   Draw :: XY Int -> RGB Int -> Picture
   Pictures :: [Picture] -> Picture
+  deriving (Generic,NFData)
 
 init :: Code -> IO (Context,State,Prog) -- IO to load roms from file
 init Code{entry=prog,regDecs,romSpecs,ramDecs} = do

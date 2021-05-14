@@ -5,6 +5,9 @@ module Value (
   sizedNat, nat2int, plusNat, minusNat, sizeOfNat, isZeroNat,
   ) where
 
+import Control.DeepSeq (NFData)
+import GHC.Generics (Generic)
+
 data Key
   = KeyEnter
   | KeyShift
@@ -12,11 +15,11 @@ data Key
   | KeyX
   deriving (Eq,Ord,Enum,Bounded,Show)
 
-data Bit = B0 | B1
+data Bit = B0 | B1   deriving (Generic,NFData)
 type Nat = [Bit] -- MSB first (like all bit lists)
-data XY a = XY { x :: a, y :: a } deriving (Eq,Ord,Functor)
-data RGB a = RGB { r :: a, g :: a, b :: a } deriving (Functor)
-newtype Size = Size { size :: Int } deriving (Eq,Ord,Num)
+data XY a = XY { x :: a, y :: a } deriving (Eq,Ord,Functor,Generic,NFData)
+data RGB a = RGB { r :: a, g :: a, b :: a } deriving (Functor,Generic,NFData)
+newtype Size = Size { size :: Int } deriving newtype (Eq,Ord,Num,NFData)
 
 instance Show Bit where show = \case B0 -> "0"; B1 -> "1"
 instance Show a => Show (XY a) where show XY{x,y} = show (x,y)
