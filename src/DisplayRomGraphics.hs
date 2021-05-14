@@ -1,5 +1,5 @@
 
-module PacGraphics (tiles,screen) where
+module DisplayRomGraphics (tiles,screen) where
 
 import Data.List (transpose)
 import System

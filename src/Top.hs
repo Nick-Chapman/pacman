@@ -1,15 +1,15 @@
 module Top (main) where
 
 import Control.Monad (when)
+import Data.Map.Strict (Map)
 import System (System)
 import System.Environment (getArgs)
+import qualified Data.Map as Map
+import qualified DisplayRomGraphics (tiles,screen)
 import qualified EmulateWithSdl (main)
-import qualified PacGraphics (tiles,screen)
+import qualified PacVideo_Vhdl (theVideoSystem)
 import qualified SmallExamples (square,cols)
 import qualified System (Conf(..),elaborate)
-import qualified PacVideo_Vhdl (theVideoSystem)
-import Data.Map.Strict (Map)
-import qualified Data.Map as Map
 
 main :: IO ()
 main = do
@@ -30,8 +30,8 @@ examples :: Map String System
 examples = Map.fromList
   [ ("cols"      , SmallExamples.cols)
   , ("square"    , SmallExamples.square)
-  , ("tiles"     , PacGraphics.tiles)
-  , ("screen"    , PacGraphics.screen)
+  , ("tiles"     , DisplayRomGraphics.tiles)
+  , ("screen"    , DisplayRomGraphics.screen)
   , ("vhdl"      , PacVideo_Vhdl.theVideoSystem)
   ]
 
