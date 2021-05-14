@@ -2,6 +2,7 @@ module EmulateWithSdl (main) where
 
 import Code (Code,State,Keys(..),Picture(..))
 import Control.Concurrent (threadDelay)
+import Control.Monad (when)
 import Control.DeepSeq (deepseq)
 import Data.List.Extra (groupSort)
 import Data.Map (Map)
@@ -17,8 +18,8 @@ import qualified SDL
 
 data World = World { state :: State, keys :: Keys, frame :: Int}
 
-main :: Code -> IO ()
-main code = do
+main :: Code -> Bool -> IO ()
+main code accpix = do
   let! _ = keyMapTable
   SDL.initializeAll
 
@@ -31,7 +32,7 @@ main code = do
   let winConfig = SDL.defaultWindow { SDL.windowInitialSize = windowSize }
   win <- SDL.createWindow (Text.pack "PacMan") $ winConfig
   renderer <- SDL.createRenderer win (-1) SDL.defaultRenderer
-  let assets = DrawAssets { renderer, sf, offset }
+  let assets = DrawAssets { renderer, sf, offset, accpix }
   (context,state,prog) <- Code.init code
   let keys = Keys { pressed = Set.empty }
   let world0 = World { state, keys, frame = 0 }
@@ -49,6 +50,9 @@ main code = do
       keys <- pure $ foldl insertInteresting keys interesting
       threadDelay (1000000 `div` 60) -- 1/60 sec
       loop World { state, keys, frame = frame+1 }
+
+  setColor renderer darkGrey
+  SDL.clear renderer
 
   loop world0
   SDL.destroyRenderer renderer
@@ -107,12 +111,14 @@ data DrawAssets = DrawAssets
   { renderer :: Renderer
   , sf :: CInt
   , offset :: CInt
+  , accpix :: Bool
   }
 
 drawEverything :: DrawAssets -> Picture -> IO ()
-drawEverything assets@DrawAssets{renderer=r} picture = do
-  setColor r darkGrey
-  SDL.clear r
+drawEverything assets@DrawAssets{renderer=r,accpix} picture = do
+  when (not accpix) $ do
+    setColor r darkGrey
+    SDL.clear r
   renderPicture assets picture
   SDL.present r
 
