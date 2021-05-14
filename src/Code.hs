@@ -6,7 +6,7 @@ module Code (
   init, Context, State, runForOneFrame, Keys(..), Picture(..),
   ) where
 
-import Control.DeepSeq (NFData(..))
+import Control.DeepSeq (NFData)
 import Data.Map (Map)
 import Data.Set (Set)
 import GHC.Generics (Generic)
@@ -26,9 +26,9 @@ data Code = Code
   { regDecs :: [(RegId,Size,String)]
   , ramDecs :: [(RamId,Size)]
   , romSpecs :: [(RomId,RomSpec)]
+  , screenSpec :: ScreenSpec
   , entry :: Prog
   }
-  deriving (Generic,NFData)
 
 -- statement in the generated program, works in context of some decs
 data Prog where
@@ -37,7 +37,6 @@ data Prog where
   P_Step :: Step -> Prog
   P_If :: E Bit -> Prog -> Prog -> Prog
   P_Repeat :: Int -> Prog -> Prog
-  deriving (Generic,NFData)
 
 -- basic program step (statement), which is sequenced in a program
 data Step where
@@ -46,8 +45,6 @@ data Step where
   S_SetReg :: Show a => Reg a -> E a -> Step
   S_SetPixel :: XY (E Nat) -> RGB (E Nat) -> Step
   S_Trace :: String -> E Nat -> Step
-
-instance NFData Step where rnf = undefined -- TODO: why is this ok?
 
 -- operation (non atomic/pure expression), will always be let-bound
 -- these things MUST be name
@@ -73,10 +70,6 @@ data E a where
   E_TmpIndexed :: Tmp [Bit] -> Int -> E Bit
   E_Combine :: [E Bit] -> E [Bit]
 
-instance NFData (E a) where rnf = undefined -- TODO: why is this ok?
-
--- TODO: break E into two levels E/A, with no recursion in E for Concat etc
-
 eNot :: E Bit -> E Bit
 eNot = \case
   E_Lit z B1 -> E_Lit z B0
@@ -93,11 +86,10 @@ data Tmp a where
   Tmp1 :: TmpId -> Tmp Bit
 
 data RomSpec = RomSpec { path :: String, size :: Int }
-  deriving (Generic,NFData)
 
 newtype RegId = RegId { u :: Int } deriving newtype (Eq,Ord,Num,NFData)
 newtype TmpId = TmpId { u :: Int } deriving (Eq,Ord)
-newtype RomId = RomId { u :: Int } deriving newtype (Eq,Ord,Num,NFData)
+newtype RomId = RomId { u :: Int } deriving newtype (Eq,Ord,Num)
 newtype RamId = RamId { u :: Int } deriving newtype (Eq,Ord,Num,NFData)
 
 data Context = Context
@@ -118,12 +110,12 @@ data Picture where
   Pictures :: [Picture] -> Picture
   deriving (Generic,NFData)
 
-init :: Code -> IO (Context,State,Prog) -- IO to load roms from file
-init Code{entry=prog,regDecs,romSpecs,ramDecs} = do
+init :: Code -> IO (ScreenSpec,Context,State,Prog) -- IO to load roms from file
+init Code{entry=prog,regDecs,romSpecs,ramDecs,screenSpec} = do
   let regs = Map.fromList [ (r,zeroOf size) | (r,Size {size},_) <- regDecs ]
   let rams = Map.fromList [ (id,ram) | (id,Size n) <- ramDecs, let ram = Ram.init n ]
   roms <- loadRoms romSpecs
-  pure $ (Context {roms},State {regs,rams},prog)
+  pure $ (screenSpec,Context {roms},State {regs,rams},prog)
     where
       zeroOf :: Int -> [Bit]
       zeroOf size = take size (repeat B0)

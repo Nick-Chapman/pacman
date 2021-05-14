@@ -1,5 +1,5 @@
 
-module PacGraphics (tiles,sprites,screen) where
+module PacGraphics (tiles,screen) where
 
 import Data.List (transpose)
 import System
@@ -7,22 +7,19 @@ import Value
 
 tiles :: System
 tiles = withMac $ \mac -> do
-  FrameEffect $ do
+  let ss = defaultScreenSpec { sf = 3, size = XY { x = 330, y = 256 } }
+  FrameEffect ss $ do
     seeCols mac
     seePals mac
     seeTiles mac
-
-sprites :: System
-sprites = withMac $ \mac -> do
-  FrameEffect $ do
-    seeCols mac
-    seePals mac
     seeSprites mac
 
 screen :: System
 screen = withMac $ \mac -> do
   DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
-  FrameEffect $ do
+  let (x,y) = (8*28, 8*36)
+  let ss = defaultScreenSpec { sf = 3, size = XY { x, y }}
+  FrameEffect ss $ do
     loadDump dump mac
     loadSpriteDump mac
     drawTiles mac
@@ -110,7 +107,7 @@ seeTiles mac = do
   palette <- readPalette mac pi
   sequence_
     [ do
-        let xoff = 30
+        let xoff = 0
         let yoff = 80
         let i = 16*y + x
         let xy = XY { x = nat8 (xoff + 10*x), y = nat9 (yoff + 10*y) }
@@ -127,10 +124,10 @@ seeSprites mac = do
   palette <- readPalette mac pi
   sequence_
     [ do
-        let xoff = 30
+        let xoff = 170
         let yoff = 80
         let i = 8*y + x
-        let xy = XY { x = nat8 (xoff + 20*x), y = nat9 (yoff + 20*y) }
+        let xy = XY { x = nat9 (xoff + 20*x), y = nat9 (yoff + 20*y) }
         sprite <- readSprite mac (SI (nat8 i))
         drawSprite xy sprite palette
     |

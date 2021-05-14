@@ -9,7 +9,7 @@ import Data.Map (Map)
 import Foreign.C.Types (CInt)
 import Prelude hiding (init)
 import SDL (Renderer,Rectangle(..),V2(..),V4(..),Point(P),($=))
-import Value (Key(..),XY(..),RGB(..))
+import Value (ScreenSpec(..),Key(..),XY(..),RGB(..))
 import qualified Code (init,runForOneFrame)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -20,20 +20,20 @@ data World = World { state :: State, keys :: Keys, frame :: Int}
 
 main :: Code -> Bool -> IO ()
 main code accpix = do
+  (ss,context,state,prog) <- Code.init code
   let! _ = keyMapTable
   SDL.initializeAll
-
-  let sf = 1
+  let fi = fromIntegral
+  let ScreenSpec{sf,size=XY{x=screenW,y=screenH}} = ss
   let offset = 8
-  let screenW = 512 --(8*28)
-  let screenH = 512 --(8*36)
+  --let screenW = 512 --(8*28)
+  --let screenH = 512 --(8*36)
 
-  let windowSize = V2 (sf * (2*offset + screenW)) (sf * (2*offset + screenH))
+  let windowSize = V2 (fi sf * (2*offset + fi screenW)) (fi sf * (2*offset + fi screenH))
   let winConfig = SDL.defaultWindow { SDL.windowInitialSize = windowSize }
   win <- SDL.createWindow (Text.pack "PacMan") $ winConfig
   renderer <- SDL.createRenderer win (-1) SDL.defaultRenderer
-  let assets = DrawAssets { renderer, sf, offset, accpix }
-  (context,state,prog) <- Code.init code
+  let assets = DrawAssets { renderer, sf = fi sf, offset, accpix }
   let keys = Keys { pressed = Set.empty }
   let world0 = World { state, keys, frame = 0 }
   let
@@ -41,14 +41,14 @@ main code accpix = do
     loop World{state,keys,frame} = do
       putStrLn $ "frame: " ++ show frame ++ ", emulating..."
       x <- Code.runForOneFrame prog context state keys
+      let! (picture,state) = x `deepseq` x
       putStrLn $ "frame: " ++ show frame ++ ", emulating...done"
-      let (picture,state) = x `deepseq` x
       drawEverything assets picture
       events <- SDL.pollEvents
       let interesting = [ i | e <- events, i <- interestingOf e ]
       if Quit `elem` interesting then pure () else do --quit
       keys <- pure $ foldl insertInteresting keys interesting
-      threadDelay (1000000 `div` 60) -- 1/60 sec
+      let _ = threadDelay (1000000 `div` 60) -- 1/60 sec
       loop World { state, keys, frame = frame+1 }
 
   setColor renderer darkGrey

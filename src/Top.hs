@@ -4,7 +4,7 @@ import Control.Monad (when)
 import System (System)
 import System.Environment (getArgs)
 import qualified EmulateWithSdl (main)
-import qualified PacGraphics (tiles,sprites,screen)
+import qualified PacGraphics (tiles,screen)
 import qualified SmallExamples (square,cols)
 import qualified System (Conf(..),elaborate)
 import qualified PacVideo_Vhdl (theVideoSystem)
@@ -39,12 +39,13 @@ parseArgs = do
       "accpix":xs -> loop conf { accpix = True } xs
       "slow":xs -> loop conf { specializeRoms = False } xs
       "quick":xs -> loop conf { specializeRoms = True } xs
+
       "cols":xs -> loop conf { example = SmallExamples.cols } xs
       "square":xs -> loop conf { example = SmallExamples.square } xs
       "tiles":xs -> loop conf { example = PacGraphics.tiles } xs
-      "sprites":xs -> loop conf { example = PacGraphics.sprites } xs
       "screen":xs -> loop conf { example = PacGraphics.screen } xs
       "vhdl":xs -> loop conf { example = PacVideo_Vhdl.theVideoSystem } xs
+
       xs -> error (show ("parseArgs",xs))
 
 run :: Conf -> IO ()

@@ -2,7 +2,7 @@ module System(
   System(..), Eff(..), Reg, RomId, RomSpec(..), RamId,
   Conf(..),elaborate,
   -- effect-free combinators
-  E, eLit, eSized, eNot, keyDown, combine, split, index,
+  E, sizeE, eLit, eSized, eNot, keyDown, combine, split, index,
   ) where
 
 import Control.Monad (ap,liftM)
@@ -18,7 +18,7 @@ instance Monad Eff where return = Ret; (>>=) = Bind
 
 -- top level effect; declare regs, load rom etc
 data System
-  = FrameEffect (Eff ())
+  = FrameEffect ScreenSpec (Eff ())
   | DeclareRom RomSpec (RomId -> System)
   | DeclareReg1 String (Reg Bit -> System)
   | DeclareReg String Size (Reg [Bit] -> System)
@@ -74,10 +74,10 @@ elaborate Conf{specializeRoms} = loop es0
         loop es { regId = regId + 1, regs = (regId,size,name) : regs } (f reg)
       DeclareRam size f -> do
         loop es { ramId = ramId + 1, ramDecs = (ramId,size) : ramDecs } (f ramId)
-      FrameEffect eff -> do
+      FrameEffect screenSpec eff -> do
         roms <- if specializeRoms then loadRoms romSpecs else pure Map.empty
         let prog = compile0 roms eff
-        pure $ Code { romSpecs, ramDecs, regDecs = regs, entry = prog }
+        pure $ Code { romSpecs, ramDecs, regDecs = regs, screenSpec, entry = prog }
 
 data CS = CS
   { u :: Int
@@ -187,8 +187,8 @@ compile0 roms eff0 = do
         case (trySimpPlus (e1,e2)) of
           Just e -> k s e
           Nothing -> do
-            let size = ensureSameSize (sizeE e1) (sizeE e2)
             let oper = O_Plus e1 e2
+            let size = max (sizeE e1) (sizeE e2)
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
 
@@ -196,8 +196,8 @@ compile0 roms eff0 = do
         case (trySimpPlus (e1,e2)) of
           Just e -> k s e
           Nothing -> do
-            let size = ensureSameSize (sizeE e1) (sizeE e2)
             let oper = O_Minus e1 e2
+            let size = max (sizeE e1) (sizeE e2)
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
 
@@ -211,8 +211,8 @@ compile0 roms eff0 = do
           E_Lit _ B1 -> k s yes
           E_Lit _ B0 -> k s no
           _ -> do
-            let size = ensureSameSize (sizeE yes) (sizeE no)
             let oper = O_Mux sel yn
+            let size = ensureSameSize oper (sizeE yes) (sizeE no)
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
 
@@ -238,9 +238,9 @@ compile0 roms eff0 = do
       WriteRam id a b -> do
         doStep (S_WriteRam id a b) (k s ())
 
-
-ensureSameSize :: Size -> Size -> Size
-ensureSameSize z1 z2 = if z1 == z2 then z1 else error (show ("ensureSameSize",z1,z2))
+ensureSameSize :: Show a => Oper a -> Size -> Size -> Size
+ensureSameSize oper z1 z2 =
+  if z1 == z2 then z1 else error (show ("ensureSameSize",oper,z1,z2))
 
 share1 :: CS -> Oper Bit -> (CS -> Tmp Bit -> Res) -> Res
 share1 s@CS{u} oper k = do

@@ -22,7 +22,8 @@ theVideoSystem = do
   withRegisters $ \registers -> do
   withVideoTimingRegs $ \vtRegs -> do
   DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
-  FrameEffect $ do
+  let ss = defaultScreenSpec { sf = 1, size = XY { x = 512, y = 512 } }
+  FrameEffect ss $ do
    loadDump dump rams
    runForallPixels registers vtRegs $ do
 

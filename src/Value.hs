@@ -1,8 +1,8 @@
 module Value (
-  YN(..), XY(..), RGB(..), Key(..), Nat, Bit(..),
-  Size(..),
+  YN(..), XY(..), RGB(..), Key(..), Nat, Bit(..), Size(..), ScreenSpec(..),
   checkSize, isBit1, andBit, notBit, indexBits,
   sizedNat, nat2int, plusNat, minusNat, sizeOfNat, isZeroNat,
+  defaultScreenSpec,
   ) where
 
 import Control.DeepSeq (NFData)
@@ -21,6 +21,11 @@ type Nat = [Bit] -- MSB first (like all bit lists)
 data XY a = XY { x :: a, y :: a } deriving (Eq,Ord,Functor,Generic,NFData)
 data RGB a = RGB { r :: a, g :: a, b :: a } deriving (Functor,Generic,NFData)
 newtype Size = Size { size :: Int } deriving newtype (Eq,Ord,Num,NFData)
+
+data ScreenSpec = ScreenSpec { sf ::Int, size :: XY Int }
+
+defaultScreenSpec :: ScreenSpec
+defaultScreenSpec = ScreenSpec { sf = 2, size = XY { x= 256, y = 256 } }
 
 instance Show Bit where show = \case B0 -> "0"; B1 -> "1"
 instance Show a => Show (XY a) where show XY{x,y} = show (x,y)

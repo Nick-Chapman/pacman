@@ -10,7 +10,8 @@ cols = do
   DeclareReg "ry" (Size 3) $ \ry -> do
   DeclareReg "ri" (Size 4) $ \ri -> do
   let rr = (rx,ry)
-  FrameEffect $ do
+  let ss = defaultScreenSpec { sf = 4, size = XY { x = 256, y = 20 } }
+  FrameEffect ss $ do
     Repeat 64 $ do
       SetReg ri (eSized 4 0)
       Repeat 16 $ do
@@ -24,7 +25,7 @@ _eRepeat n e = sequence_ (replicate n e)
 increment :: Reg Nat -> Eff ()
 increment r = do
   n <- GetReg r
-  n' <- Plus n one
+  n' <- Plus n (eSized (sizeE n) 1)
   SetReg r n'
 
 colSquare :: (Reg Nat, Reg Nat) -> RomId -> Reg Nat -> Eff ()
@@ -101,9 +102,9 @@ square = do
   DeclareReg1 "high" $ \highReg -> do
   DeclareReg "xpos" Size {size = 8} $ \xposReg -> do
   let ms = MS {enterLastReg,highReg,xposReg}
-  FrameEffect $ do
+  let ss = defaultScreenSpec { sf = 3 }
+  FrameEffect ss $ do
     moveSquare 5 ms
-    --moveSquare 5 ms
 
 moveSquare :: Int -> MS -> Eff ()
 moveSquare w MS{xposReg,enterLastReg,highReg}= do
