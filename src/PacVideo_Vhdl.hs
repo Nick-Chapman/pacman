@@ -250,10 +250,7 @@ data Registers = Registers
   , vout_hblank :: Reg Bit
   , vout_db :: Reg B5
   , ra :: Reg B8
-  , sprite_ram_addr_t1 :: Reg B12
   , vout_obj_on_t1 :: Reg Bit
-  , lut_4a_t1      :: Reg B8
-  , vout_hblank_t1 :: Reg Bit
   , video_out :: Reg B8
   }
 
@@ -270,10 +267,7 @@ withRegisters f = do
   DeclareReg1 "vout_hblank" $ \vout_hblank -> do
   DeclareReg "vout_db" (Size 5) $ \vout_db -> do
   DeclareReg "ra" (Size 8) $ \ra -> do
-  DeclareReg "sprite_ram_addr_t1" (Size 12) $ \sprite_ram_addr_t1 -> do
   DeclareReg1 "vout_obj_on_t1" $ \vout_obj_on_t1 -> do
-  DeclareReg "lut_4a_t1" (Size 8) $ \lut_4a_t1 -> do
-  DeclareReg1 "vout_hblank_t1" $ \vout_hblank_t1 -> do
   DeclareReg "video_out" (Size 8) $ \video_out -> do
     f Registers
       { char_sum_reg
@@ -287,10 +281,7 @@ withRegisters f = do
       , vout_hblank
       , vout_db
       , ra
-      , sprite_ram_addr_t1
       , vout_obj_on_t1
-      , lut_4a_t1
-      , vout_hblank_t1
       , video_out
       }
 
@@ -441,9 +432,8 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
         B1 -> do
           SetReg ra dr
         B0 -> do
-          incremented <- do
-            Plus ra' byte1
-          SetReg ra incremented
+          ra1 <- Plus ra' byte1
+          SetReg ra ra1
 
   sprite_ram_addr :: E B12 <- do
     pure $ bits [b0,b0,b0,b0] & ra'
@@ -473,10 +463,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   do -- p_sprite_ram_ip_reg
     if_ ena_6 $ do
-      sprite_ram_addr_t1 <= sprite_ram_addr
       vout_obj_on_t1 <= vout_obj_on'
-      vout_hblank_t1 <= vout_hblank'
-      lut_4a_t1 <= lut_4a
 
   -- Dont need to drive the write side of the sprite RAM
   -- p_sprite_ram_ip_comb
