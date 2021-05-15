@@ -17,7 +17,7 @@ tiles = withMac $ \mac -> do
 screen :: System
 screen = withMac $ \mac -> do
   DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
-  let (x,y) = (8*28, 8*36)
+  let (x,y) = (256,288) -- bug in X! --(224,288) == (8*28, 8*36)
   let ss = defaultScreenSpec { sf = 3, size = XY { x, y }}
   FrameEffect ss $ do
     loadDump dump mac

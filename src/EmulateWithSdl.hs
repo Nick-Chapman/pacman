@@ -131,10 +131,10 @@ renderPicture DrawAssets{renderer=r,ss,offset} = traverse
         let fi = fromIntegral
         let ScreenSpec{sf,size=XY{x=maxX,y=maxY}} = ss
         --putStrLn (show ("pixel",(maxX,maxY),(x,y),rgb))
-        when (x<0) $ error "pixel:x<0"
-        when (y<0) $ error "pixel:y<0"
-        when (x>=maxX) $ error "pixel:x>=maxX"
-        when (y>=maxY) $ error "pixel:y>=maxY"
+        when (x<0) $ error (show ("pixel:x<0",x))
+        when (y<0) $ error (show ("pixel:y<0",y))
+        when (x>=maxX) $ error (show ("pixel:x>=maxX",x,maxX))
+        when (y>=maxY) $ error (show ("pixel:y>=maxY",y,maxY))
         setColor r rgb
         let x' = fi sf * (fromIntegral x + offset)
         let y' = fi sf * (fromIntegral y + offset)
