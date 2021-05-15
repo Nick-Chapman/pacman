@@ -17,21 +17,23 @@ theVideoSystem = do
   withRegisters $ \registers -> do
   withVideoTimingRegs $ \vtRegs -> do
   DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
-  let ss = defaultScreenSpec { sf = 1, size = XY { x = 512, y = 512 } }
+  let x = 224 -- (28*8)
+  let y = 288 -- (36*8)
+  let ss = defaultScreenSpec { sf = 3, size = XY { x, y } }
   FrameEffect ss $ do
    loadDump dump rams
 
-   Repeat 10000 $ do -- TODO: needs to be 100,000 (every 1/60s frame) !
+   Repeat 384 $ do -- TODO: needs to be 384*264 (every 1/60s frame) !
 
     let ena_6 :: E Bit = b1
-
-    video_timing vtRegs ena_6
 
     let VideoTimingRegs{..} = vtRegs
     i_hcnt <- GetReg hcnt -- TODO: idea: intro type for reg/last-value
     i_vcnt <- GetReg vcnt
     i_hblank <- GetReg hblank
     i_vblank <- GetReg vblank
+
+    video_timing vtRegs ena_6
 
     vram_addr_ab <- do
       pacman_vram_addr i_hcnt (i_vcnt `slice` (7,0))
@@ -69,18 +71,49 @@ loadDump dump Rams{vram} = do
                 WriteRam vram (eSized 11 i) b
             | i <- [0..2047]]
 
-drivePixel :: Inputs -> Outputs -> Eff ()
-drivePixel Inputs{i_hcnt,i_vcnt} Outputs{o_red,o_green,o_blue} = do
 
-  let xMax = eSized 9 511
-  x <- Minus xMax i_vcnt -- flip x left/right
-  let y = i_hcnt
-  let xy = XY { x, y }
+{-
+  Display is rotated 90 degrees, so:
+    vcnt, maps to the X position on the screen (flipped)
+    hcnt, maps to the Y position on the screen
+
+X: vcnt (9 bits), varies more slowly
+  runs:   248 (0x0F8) .. 511 (0x1FF) -- 264 ticks
+  vblank: 495 (0x1EF) .. 271 (0x10F) --  40 ticks
+
+  pixels: 272..495 (#224)
+
+Y: hcnt (9 bits), varies more quickly
+  runs:   128 (0x080) .. 511 (0x1FF) -- 384 ticks
+  blank:  143 (0x08F) .. 239 (0x0EF) --  96 ticks
+
+  pixels: 128..143, 240..511 (#288)
+-}
+
+drivePixel :: Inputs -> Outputs -> Eff ()
+drivePixel Inputs{i_hblank,i_vblank,i_hcnt,i_vcnt} Outputs{o_red,o_green,o_blue} = do
 
   --let colByte = o_red & o_green & o_blue -- BUG#3
   let colByte = o_blue & o_green & o_red
   rgb <- decodeAsRGB colByte
-  SetPixel xy rgb
+
+  x <- Minus (eSized 9 495) i_vcnt -- 272..495 --> 223..0 (flips left/right)
+
+  blanked <- i_hblank `or` i_vblank
+  if_ (not blanked) $ do
+
+    splitPart <- not (i_hcnt `index` 8) `and` not (i_hcnt `index` 6)
+
+    if_ splitPart $ do
+      y <- Plus i_hcnt (eSized 9 144) -- 128..143 --> 272..287
+      let xy = XY { x, y }
+      SetPixel xy rgb
+
+    if_ (not splitPart) $ do
+      y <- Minus i_hcnt (eSized 9 240) -- 240..511 --> 0..271
+      let xy = XY { x, y }
+      SetPixel xy rgb
+
 
 decodeAsRGB :: E Nat -> Eff (RGB (E Nat))
 decodeAsRGB w = do
@@ -121,8 +154,8 @@ data VideoTimingRegs = VideoTimingRegs
 
 withVideoTimingRegs :: (VideoTimingRegs -> System) -> System
 withVideoTimingRegs f = do
-  DeclareRegi "hcnt" (sizedNat 9 0) $ \hcnt -> do
-  DeclareRegi "vcnt" (sizedNat 9 0xF8) $ \vcnt -> do
+  DeclareRegi "hcnt" (sizedNat 9 0x080) $ \hcnt -> do
+  DeclareRegi "vcnt" (sizedNat 9 0x0F8) $ \vcnt -> do
   DeclareReg1 "hblank" $ \hblank -> do
   DeclareReg1i "vblank" B1 $ \vblank -> do
   f VideoTimingRegs { hcnt, vcnt, hblank, vblank }
