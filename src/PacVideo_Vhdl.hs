@@ -71,9 +71,12 @@ loadDump dump Rams{vram} = do
 
 drivePixel :: Inputs -> Outputs -> Eff ()
 drivePixel Inputs{i_hcnt,i_vcnt} Outputs{o_red,o_green,o_blue} = do
-  let x = i_vcnt
+
+  let xMax = eSized 9 511
+  x <- Minus xMax i_vcnt -- flip x left/right
   let y = i_hcnt
-  let xy = XY {x, y}
+  let xy = XY { x, y }
+
   --let colByte = o_red & o_green & o_blue -- BUG#3
   let colByte = o_blue & o_green & o_red
   rgb <- decodeAsRGB colByte
