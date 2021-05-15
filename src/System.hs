@@ -47,7 +47,7 @@ data Eff a where
 data ES = ES -- elaboration state
   { regId :: RegId
   , ramId :: RamId
-  , regs :: [(RegId,Size,String)]
+  , regs :: [RegDec]
   , romId :: RomId
   , romSpecs :: [(RomId,RomSpec)]
   , ramDecs :: [(RamId,Size)]
@@ -65,13 +65,18 @@ elaborate Conf{specializeRoms} = loop es0
     loop es@ES{regId,ramId,regs,romId,romSpecs,ramDecs} = \case
       DeclareRom spec f -> do
         loop es { romId = romId + 1, romSpecs = (romId,spec) : romSpecs } (f romId)
+
       DeclareReg name size f -> do
         let reg = Reg size regId
-        loop es { regId = regId + 1, regs = (regId,size,name) : regs } (f reg)
+        let regDec = RegDec { rid = regId, size, name }
+        loop es { regId = regId + 1, regs = regDec : regs } (f reg)
+
       DeclareReg1 name f -> do
         let size = Size { size = 1 }
         let reg = Reg1 regId
-        loop es { regId = regId + 1, regs = (regId,size,name) : regs } (f reg)
+        let regDec = RegDec { rid = regId, size, name }
+        loop es { regId = regId + 1, regs = regDec : regs } (f reg)
+
       DeclareRam size f -> do
         loop es { ramId = ramId + 1, ramDecs = (ramId,size) : ramDecs } (f ramId)
       FrameEffect screenSpec eff -> do

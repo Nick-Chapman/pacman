@@ -1,6 +1,6 @@
 module Code (
   Code(..), Prog(..), Step(..), E(..), Oper(..), eNot,
-  RegId, Reg(..), Tmp(..), TmpId(..), RomId, RomSpec(..), RamId,
+  RegId, Reg(..), Tmp(..), TmpId(..), RegDec(..), RomId, RomSpec(..), RamId,
   pretty,
   loadRoms, readRom,
   init, Context, State, runForOneFrame, Keys(..), Picture(..),
@@ -23,11 +23,17 @@ import Value
 
 -- full generated code. includes decs & prog
 data Code = Code
-  { regDecs :: [(RegId,Size,String)]
+  { regDecs :: [RegDec]
   , ramDecs :: [(RamId,Size)]
   , romSpecs :: [(RomId,RomSpec)]
   , screenSpec :: ScreenSpec
   , entry :: Prog
+  }
+
+data RegDec = RegDec
+  { rid :: RegId
+  , size :: Size
+  , name :: String -- user name
   }
 
 -- statement in the generated program, works in context of some decs
@@ -112,13 +118,13 @@ data Picture where
 
 init :: Code -> IO (ScreenSpec,Context,State,Prog) -- IO to load roms from file
 init Code{entry=prog,regDecs,romSpecs,ramDecs,screenSpec} = do
-  let regs = Map.fromList [ (r,zeroOf size) | (r,Size {size},_) <- regDecs ]
+  let regs = Map.fromList [ (rid,zeroOf size) | RegDec{rid,size} <- regDecs ]
   let rams = Map.fromList [ (id,ram) | (id,Size n) <- ramDecs, let ram = Ram.init n ]
   roms <- loadRoms romSpecs
   pure $ (screenSpec,Context {roms},State {regs,rams},prog)
     where
-      zeroOf :: Int -> [Bit]
-      zeroOf size = take size (repeat B0)
+      zeroOf :: Size -> [Bit]
+      zeroOf (Size n) = take n (repeat B0)
 
 
 loadRoms :: [(RomId,RomSpec)] -> IO (Map RomId Rom)
@@ -283,7 +289,8 @@ class Pretty a where
 instance Pretty Code where
   lay Code{romSpecs,regDecs,ramDecs,entry} =
     [ "rom " ++ show id ++ " : " ++ show spec | (id,spec) <- romSpecs ] ++
-    [ "reg " ++ show id ++ " : " ++ show size ++ " // " ++ name | (id,size,name) <- regDecs ] ++
+    [ "reg " ++ show rid ++ " : " ++ show size ++ " // " ++ name
+    | RegDec {rid,size,name} <- regDecs ] ++
     [ "ram " ++ show id ++ " : " ++ show size | (id,size) <- ramDecs ] ++
     lay entry
 
