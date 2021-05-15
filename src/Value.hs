@@ -90,7 +90,10 @@ minusNat x y = do
   let nx = length x
   let ny = length y
   let n = max nx ny
-  drop 1 $ sizedNat (Size (n+1)) (nat2int x - nat2int y) -- ???
+  drop 1 $ sizedNat (Size (n+1)) (pow2 n + nat2int x - nat2int y) -- ???
+
+pow2 :: Int -> Int
+pow2 n = product (replicate n 2)
 
 isZeroNat :: Nat -> Bit
 isZeroNat n = if nat2int n == 0 then B1 else B0
