@@ -121,8 +121,8 @@ data VideoTimingRegs = VideoTimingRegs
 
 withVideoTimingRegs :: (VideoTimingRegs -> System) -> System
 withVideoTimingRegs f = do
-  DeclareReg "hcnt" (Size 9) $ \hcnt -> do
-  DeclareReg "vcnt" (Size 9) $ \vcnt -> do
+  DeclareRegi "hcnt" (sizedNat 9 0) $ \hcnt -> do
+  DeclareRegi "vcnt" (sizedNat 9 0xF8) $ \vcnt -> do
   DeclareReg1 "hblank" $ \hblank -> do
   DeclareReg1i "vblank" B1 $ \vblank -> do
   f VideoTimingRegs { hcnt, vcnt, hblank, vblank }

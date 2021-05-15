@@ -23,6 +23,7 @@ data System
   | DeclareReg1 String (Reg Bit -> System)
   | DeclareReg1i String Bit (Reg Bit -> System)
   | DeclareReg String Size (Reg [Bit] -> System)
+  | DeclareRegi String [Bit] (Reg [Bit] -> System)
   | DeclareRam Size (RamId -> System)
 
 -- the core effect type
@@ -70,6 +71,12 @@ elaborate Conf{specializeRoms} = loop es0
       DeclareReg name size f -> do
         let reg = Reg size regId
         let init = zeroOf size
+        let regDec = RegDec { rid = regId, size, init, name }
+        loop es { regId = regId + 1, regs = regDec : regs } (f reg)
+
+      DeclareRegi name init f -> do
+        let size = Size (length init)
+        let reg = Reg size regId
         let regDec = RegDec { rid = regId, size, init, name }
         loop es { regId = regId + 1, regs = regDec : regs } (f reg)
 
