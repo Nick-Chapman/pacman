@@ -44,7 +44,7 @@ data Step where
   S_WriteRam :: RamId -> E Nat -> E Nat -> Step
   S_SetReg :: Show a => Reg a -> E a -> Step
   S_SetPixel :: XY (E Nat) -> RGB (E Nat) -> Step
-  S_Trace :: String -> E Nat -> Step
+  S_Trace :: String -> [E Nat] -> Step
 
 -- operation (non atomic/pure expression), will always be let-bound
 -- these things MUST be name
@@ -177,9 +177,10 @@ evalStep rs@RS{screen,state,tmps} = \case
          (fmap (nat2int . evalE rs) xy)
          (fmap (nat2int . evalE rs) rgb)
        }
-  S_Trace tag e -> do
-    let nat = evalE rs e
-    printf "%s : %X\n" tag (nat2int nat)
+  S_Trace tag exps -> do
+    let vs = map (nat2int . evalE rs) exps
+    let hex :: Int -> String = printf "%X"
+    putStrLn $ tag ++ ": " ++ show (map hex vs)
     pure rs
 
 bindTmp :: Tmps -> a -> Tmp a -> Tmps
@@ -315,7 +316,7 @@ instance Show Step where
     S_WriteRam id a b -> show id ++ "[" ++ show a ++ "] := " ++ show b
     S_SetReg reg exp -> show reg ++ " := " ++ show exp
     S_SetPixel xy rgb -> "set-pixel " ++ show xy ++ " := " ++ show rgb
-    S_Trace tag exp -> "trace: " ++ tag ++ " = " ++ show exp
+    S_Trace tag exps -> "trace: " ++ tag ++ " = " ++ show exps
 
 sizeOfTmp :: Tmp a -> Size
 sizeOfTmp = \case

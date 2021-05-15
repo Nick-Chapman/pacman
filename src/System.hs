@@ -30,7 +30,7 @@ data Eff a where
   Bind :: Eff a -> (a -> Eff b) -> Eff b
   Repeat :: Int -> Eff () -> Eff ()
   --CaseBit :: E Bit -> Eff Bit
-  Trace :: String -> E Nat -> Eff ()
+  Trace :: String -> [E Nat] -> Eff ()
   SetPixel :: XY (E Nat) -> RGB (E Nat) -> Eff ()
   GetReg :: Reg a -> Eff (E a)
   SetReg :: Show a => Reg a -> E a -> Eff ()
@@ -152,7 +152,7 @@ compile0 roms eff0 = do
             doProg p1 (doProg p2 (k s3 ()))-}
 
       SetPixel xy rgb -> doStep (S_SetPixel xy rgb) (k s ())
-      Trace tag e -> doStep (S_Trace tag e) (k s ())
+      Trace tag exps -> doStep (S_Trace tag exps) (k s ())
 
       {-CaseBit bit -> do -- DONT USE ME, I BLOW UP
         case bit of
