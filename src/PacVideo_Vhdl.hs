@@ -91,7 +91,9 @@ Y: hcnt (9 bits), varies more quickly
 -}
 
 drivePixel :: Inputs -> Outputs -> Eff ()
-drivePixel Inputs{i_hblank,i_vblank,i_hcnt,i_vcnt} Outputs{o_red,o_green,o_blue} = do
+drivePixel Inputs{i_vblank,i_hcnt,i_vcnt} Outputs{o_red,o_green,o_blue} = do
+
+  -- hblank seems off (by 8?) regarding which pixels to display ?!
 
   --let colByte = o_red & o_green & o_blue -- BUG#3
   let colByte = o_blue & o_green & o_red
@@ -99,18 +101,18 @@ drivePixel Inputs{i_hblank,i_vblank,i_hcnt,i_vcnt} Outputs{o_red,o_green,o_blue}
 
   x <- Minus (eSized 9 495) i_vcnt -- 272..495 --> 223..0 (flips left/right)
 
-  blanked <- i_hblank `or` i_vblank
-  if_ (not blanked) $ do
+  if_ (not i_vblank) $ do
 
-    splitPart <- not (i_hcnt `index` 8) `and` not (i_hcnt `index` 6)
+    partA <- Less i_hcnt (eSized 9 152) -- 128..151 (24)
+    partB <- Less (eSized 9 247) i_hcnt -- 248..511 (264)
 
-    if_ splitPart $ do
-      y <- Plus i_hcnt (eSized 9 144) -- 128..143 --> 272..287
+    if_ partA $ do
+      y <- Plus i_hcnt (eSized 9 136) -- 128..151 --> 264..287
       let xy = XY { x, y }
       SetPixel xy rgb
 
-    if_ (not splitPart) $ do
-      y <- Minus i_hcnt (eSized 9 240) -- 240..511 --> 0..271
+    if_ partB $ do
+      y <- Minus i_hcnt (eSized 9 248) -- 248..511 --> 0..263
       let xy = XY { x, y }
       SetPixel xy rgb
 

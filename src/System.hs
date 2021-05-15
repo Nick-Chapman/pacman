@@ -39,6 +39,7 @@ data Eff a where
   And :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
   Minus :: E Nat -> E Nat -> Eff (E Nat)
+  Less :: E Nat -> E Nat -> Eff (E Bit)
   IsZero :: E Nat -> Eff (E Bit)
   Mux :: E Bit -> YN (E [Bit])-> Eff (E [Bit])
   ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
@@ -219,13 +220,18 @@ compile0 roms eff0 = do
               k s (E_Tmp tmp)
 
       Minus e1 e2 -> do
-        case (trySimpPlus (e1,e2)) of
+        {-case (trySimpPlus (e1,e2)) of -- TODO: BUG optimizing Plus to Minus
           Just e -> k s e
-          Nothing -> do
+          Nothing -> do-}
             let oper = O_Minus e1 e2
             let size = max (sizeE e1) (sizeE e2)
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
+
+      Less e1 e2 -> do
+        let oper = O_Less e1 e2
+        share1 s oper $ \s tmp ->
+          k s (E_Tmp tmp)
 
       IsZero e -> do
         let oper = O_IsZero e
