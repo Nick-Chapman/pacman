@@ -124,7 +124,7 @@ withVideoTimingRegs f = do
   DeclareReg "hcnt" (Size 9) $ \hcnt -> do
   DeclareReg "vcnt" (Size 9) $ \vcnt -> do
   DeclareReg1 "hblank" $ \hblank -> do
-  DeclareReg1 "vblank" $ \vblank -> do
+  DeclareReg1i "vblank" B1 $ \vblank -> do
   f VideoTimingRegs { hcnt, vcnt, hblank, vblank }
 
 video_timing :: VideoTimingRegs -> E Bit -> Eff ()

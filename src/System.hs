@@ -21,6 +21,7 @@ data System
   = FrameEffect ScreenSpec (Eff ())
   | DeclareRom RomSpec (RomId -> System)
   | DeclareReg1 String (Reg Bit -> System)
+  | DeclareReg1i String Bit (Reg Bit -> System)
   | DeclareReg String Size (Reg [Bit] -> System)
   | DeclareRam Size (RamId -> System)
 
@@ -68,13 +69,22 @@ elaborate Conf{specializeRoms} = loop es0
 
       DeclareReg name size f -> do
         let reg = Reg size regId
-        let regDec = RegDec { rid = regId, size, name }
+        let init = zeroOf size
+        let regDec = RegDec { rid = regId, size, init, name }
         loop es { regId = regId + 1, regs = regDec : regs } (f reg)
 
       DeclareReg1 name f -> do
         let size = Size { size = 1 }
         let reg = Reg1 regId
-        let regDec = RegDec { rid = regId, size, name }
+        let init = zeroOf size
+        let regDec = RegDec { rid = regId, size, init, name }
+        loop es { regId = regId + 1, regs = regDec : regs } (f reg)
+
+      DeclareReg1i name bit f -> do
+        let size = Size { size = 1 }
+        let reg = Reg1 regId
+        let init = [bit]
+        let regDec = RegDec { rid = regId, size, init, name }
         loop es { regId = regId + 1, regs = regDec : regs } (f reg)
 
       DeclareRam size f -> do
@@ -83,6 +93,10 @@ elaborate Conf{specializeRoms} = loop es0
         roms <- if specializeRoms then loadRoms romSpecs else pure Map.empty
         let prog = compile0 roms eff
         pure $ Code { romSpecs, ramDecs, regDecs = regs, screenSpec, entry = prog }
+
+
+zeroOf :: Size -> [Bit]
+zeroOf (Size n) = take n (repeat B0)
 
 data CS = CS
   { u :: Int

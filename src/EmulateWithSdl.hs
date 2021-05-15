@@ -10,7 +10,7 @@ import Foreign.C.Types (CInt)
 import Prelude hiding (init)
 import SDL (Renderer,Rectangle(..),V2(..),V4(..),Point(P),($=))
 import Value (ScreenSpec(..),Key(..),XY(..),RGB(..))
-import qualified Code (init,runForOneFrame)
+import qualified Code (initialize,runForOneFrame)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text (pack)
@@ -20,7 +20,7 @@ data World = World { state :: State, keys :: Keys, frame :: Int}
 
 main :: Code -> Bool -> IO ()
 main code accpix = do
-  (ss,context,state,prog) <- Code.init code
+  (ss,context,state,prog) <- Code.initialize code
   let! _ = keyMapTable
   SDL.initializeAll
   let fi = fromIntegral

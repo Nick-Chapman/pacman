@@ -100,7 +100,7 @@ data MS = MS
 square :: System
 square = do
   DeclareReg1 "last" $ \enterLastReg -> do
-  DeclareReg1 "high" $ \highReg -> do
+  DeclareReg1i "high" B1 $ \highReg -> do
   DeclareReg "xpos" Size {size = 8} $ \xposReg -> do
   let ms = MS {enterLastReg,highReg,xposReg}
   let ss = defaultScreenSpec { sf = 3 }

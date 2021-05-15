@@ -3,7 +3,7 @@ module Code (
   RegId, Reg(..), Tmp(..), TmpId(..), RegDec(..), RomId, RomSpec(..), RamId,
   pretty,
   loadRoms, readRom,
-  init, Context, State, runForOneFrame, Keys(..), Picture(..),
+  initialize, Context, State, runForOneFrame, Keys(..), Picture(..),
   ) where
 
 import Control.DeepSeq (NFData)
@@ -33,6 +33,7 @@ data Code = Code
 data RegDec = RegDec
   { rid :: RegId
   , size :: Size
+  , init :: [Bit]
   , name :: String -- user name
   }
 
@@ -116,15 +117,12 @@ data Picture where
   Pictures :: [Picture] -> Picture
   deriving (Generic,NFData)
 
-init :: Code -> IO (ScreenSpec,Context,State,Prog) -- IO to load roms from file
-init Code{entry=prog,regDecs,romSpecs,ramDecs,screenSpec} = do
-  let regs = Map.fromList [ (rid,zeroOf size) | RegDec{rid,size} <- regDecs ]
+initialize :: Code -> IO (ScreenSpec,Context,State,Prog) -- IO to load roms from file
+initialize Code{entry=prog,regDecs,romSpecs,ramDecs,screenSpec} = do
+  let regs = Map.fromList [ (rid,init) | RegDec{rid,init} <- regDecs ]
   let rams = Map.fromList [ (id,ram) | (id,Size n) <- ramDecs, let ram = Ram.init n ]
   roms <- loadRoms romSpecs
   pure $ (screenSpec,Context {roms},State {regs,rams},prog)
-    where
-      zeroOf :: Size -> [Bit]
-      zeroOf (Size n) = take n (repeat B0)
 
 
 loadRoms :: [(RomId,RomSpec)] -> IO (Map RomId Rom)
