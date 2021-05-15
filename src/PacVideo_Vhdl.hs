@@ -610,7 +610,8 @@ bits = combine
 slice :: E [Bit] -> (Int,Int) -> E [Bit]
 slice e (high,low) =
   if high < low then error "slice:high<low" else do
-    combine [ index e i | i <- [low..high] ]
+    -- BUG#4, slice did accidental reverse (with "reverse" missing)
+    combine (reverse [ index e i | i <- [low..high] ])
 
 (&) :: E [Bit] -> E [Bit] -> E [Bit]
 (&) e1 e2 = combine (split e1 ++ split e2)
