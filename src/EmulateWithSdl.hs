@@ -26,20 +26,19 @@ main code accpix = do
   let fi = fromIntegral
   let ScreenSpec{sf,size=XY{x=screenW,y=screenH}} = ss
   let offset = 8
-  --let screenW = 512 --(8*28)
-  --let screenH = 512 --(8*36)
 
   let windowSize = V2 (fi sf * (2*offset + fi screenW)) (fi sf * (2*offset + fi screenH))
   let winConfig = SDL.defaultWindow { SDL.windowInitialSize = windowSize }
   win <- SDL.createWindow (Text.pack "PacMan") $ winConfig
   renderer <- SDL.createRenderer win (-1) SDL.defaultRenderer
-  let assets = DrawAssets { renderer, sf = fi sf, offset, accpix }
+  let assets = DrawAssets { renderer, ss, offset, accpix }
   let keys = Keys { pressed = Set.empty }
   let world0 = World { state, keys, frame = 0 }
   let
     loop :: World -> IO ()
     loop World{state,keys,frame} = do
-      --putStrLn $ "frame: " ++ show frame ++ ", emulating..."
+      --when (frame == 1) $ error "STOP"
+      putStrLn $ "frame: " ++ show frame
       x <- Code.runForOneFrame prog context state keys
       let! (picture,state) = x `deepseq` x
       --putStrLn $ "frame: " ++ show frame ++ ", emulating...done"
@@ -109,7 +108,7 @@ keyMapTable = Map.fromList ys
 
 data DrawAssets = DrawAssets
   { renderer :: Renderer
-  , sf :: CInt
+  , ss :: ScreenSpec
   , offset :: CInt
   , accpix :: Bool
   }
@@ -123,17 +122,23 @@ drawEverything assets@DrawAssets{renderer=r,accpix} picture = do
   SDL.present r
 
 renderPicture :: DrawAssets -> Picture  -> IO ()
-renderPicture DrawAssets{renderer=r,sf,offset} = traverse
+renderPicture DrawAssets{renderer=r,ss,offset} = traverse
   where
     traverse :: Picture -> IO ()
     traverse = \case
       Pictures pics -> mapM_ traverse pics
       Draw (XY{x,y}) rgb -> do
-        --putStrLn (show ("pixel",(x,y),rgb))
+        let fi = fromIntegral
+        let ScreenSpec{sf,size=XY{x=maxX,y=maxY}} = ss
+        --putStrLn (show ("pixel",(maxX,maxY),(x,y),rgb))
+        when (x<0) $ error "pixel:x<0"
+        when (y<0) $ error "pixel:y<0"
+        when (x>=maxX) $ error "pixel:x>=maxX"
+        when (y>=maxY) $ error "pixel:y>=maxY"
         setColor r rgb
-        let x' = sf * (fromIntegral x + offset)
-        let y' = sf * (fromIntegral y + offset)
-        let rect = SDL.Rectangle (SDL.P (V2 x' y')) (V2 sf sf)
+        let x' = fi sf * (fromIntegral x + offset)
+        let y' = fi sf * (fromIntegral y + offset)
+        let rect = SDL.Rectangle (SDL.P (V2 x' y')) (V2 (fi sf) (fi sf))
         SDL.fillRect r (Just rect)
 
 darkGrey :: RGB Int
