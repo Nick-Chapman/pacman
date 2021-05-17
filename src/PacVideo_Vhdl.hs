@@ -618,7 +618,9 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- write side of sprite_ram
   do
-    WriteRam sprite_ram sprite_ram_addr_t1' (nibble0 & sprite_ram_ip)
+    -- BUG #7 -- forgot the write-enable. Adding this fixes the replication bug.
+    if_ vout_obj_on_t1' $
+      WriteRam sprite_ram sprite_ram_addr_t1' (nibble0 & sprite_ram_ip)
 
 {-
   p_video_op_comb : process(vout_hblank, I_VBLANK, video_op_sel, sprite_ram_reg, lut_4a)
