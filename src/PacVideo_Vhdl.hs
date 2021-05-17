@@ -16,6 +16,10 @@ theVideoSystem = do
   withRams $ \rams@Rams{ram} -> do
   withRegisters $ \registers -> do
   withVideoTimingRegs $ \vtRegs -> do
+
+  -- TODO: An internal ram of 256 niblles ?!?
+  DeclareRam 256 $ \sprite_ram -> do
+
   DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
   let x = 224 -- (28*8)
   let y = 288 -- (36*8)
@@ -59,7 +63,7 @@ theVideoSystem = do
                   , i_hblank, i_vblank, i_flip, i_wr2_l, ena_6 }
 
     outputs <-
-      pacman_video roms rams registers inputs
+      pacman_video sprite_ram roms rams registers inputs
 
     drivePixel inputs outputs
 
@@ -305,8 +309,12 @@ data Registers = Registers
   , vout_hblank :: Reg Bit
   , vout_db :: Reg B5
   , ra :: Reg B8
-  , vout_obj_on_t1 :: Reg Bit
   , video_out :: Reg B8
+
+  , sprite_ram_addr_t1 :: Reg B12
+  , vout_obj_on_t1 :: Reg Bit
+  , vout_hblank_t1 :: Reg Bit
+  , lut_4a_t1 :: Reg B8
   }
 
 withRegisters :: (Registers -> System) -> System
@@ -323,8 +331,13 @@ withRegisters f = do
   DeclareReg1 "vout_hblank" $ \vout_hblank -> do
   DeclareReg "vout_db" (Size 5) $ \vout_db -> do
   DeclareReg "ra" (Size 8) $ \ra -> do
-  DeclareReg1 "vout_obj_on_t1" $ \vout_obj_on_t1 -> do
   DeclareReg "video_out" (Size 8) $ \video_out -> do
+
+  DeclareReg "sprite_ram_addr_t1" (Size 12) $ \sprite_ram_addr_t1 -> do
+  DeclareReg1 "vout_obj_on_t1" $ \vout_obj_on_t1 -> do
+  DeclareReg1 "vout_hblank_t1" $ \vout_hblank_t1 -> do
+  DeclareReg "lut_4a_t1" (Size 8) $ \lut_4a_t1 -> do
+
     f Registers
       { char_sum_reg
       , char_match_reg
@@ -338,15 +351,19 @@ withRegisters f = do
       , vout_hblank
       , vout_db
       , ra
-      , vout_obj_on_t1
       , video_out
+
+      , sprite_ram_addr_t1
+      , vout_obj_on_t1
+      , vout_hblank_t1
+      , lut_4a_t1
       }
 
 ----------------------------------------------------------------------
 -- | main video decode logic: 'pacman_video.vhd'
 
-pacman_video :: Roms -> Rams -> Registers -> Inputs -> Eff Outputs
-pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
+pacman_video :: RamId -> Roms -> Rams -> Registers -> Inputs -> Eff Outputs
+pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- we suffix with prime for the current value of a register
   char_hblank_reg' <- GetReg char_hblank_reg
@@ -361,8 +378,12 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
   vout_db' <- GetReg vout_db
   vout_hblank' <- GetReg vout_hblank
   vout_obj_on' <- GetReg vout_obj_on
-  vout_obj_on_t1' <- GetReg vout_obj_on_t1
   vout_yflip' <- GetReg vout_yflip
+
+  sprite_ram_addr_t1' <- GetReg sprite_ram_addr_t1
+  vout_obj_on_t1' <- GetReg vout_obj_on_t1
+  vout_hblank_t1' <- GetReg vout_hblank_t1
+  lut_4a_t1' <- GetReg lut_4a_t1
 
   -- Seems the write into the sprit ram comes via here; let's ignore that
   -- sprite_xy_ram_wen :: E Bit <- not i_wr2_l `and` ena_6
@@ -495,51 +516,132 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
           ra1 <- Plus ra' byte1
           SetReg ra ra1
 
-  -- TODO: The sprite_ram stuff needs reworking, for now, disable
-  sprite_ram_op :: E B4 <- do
-    pure nibble0
 {-
+      sprite_ram_addr <= "0000" & ra
+-}
   sprite_ram_addr :: E B12 <- do
     pure $ bits [b0,b0,b0,b0] & ra'
 
-  -- dont care about the write side of the sprite ram
-  -- let _ = (sprite_ram_ip, sprite_ram_addr_t1, vout_obj_on_t1)
-
-  -- The original was a ram of 32 nibbles. 5 bit address, 4 bit data-out
-  -- Here I use a ram of 16 bytes, and select either the hi/lo nibble
-    let a = sprite_ram_addr `slice` (4,1)
-    b <- do
-      read <- ReadRam sprite_ram a
-      Mux ena_6 YN{ yes = read, no = nibble0 }
-    --Trace "sprite_ram (a,b)" [a,b]
-    let s = sprite_ram_addr `index` 0
-    -- TODO: which way around are the nibbles addressed by the LSB ?
-    -- when I actually load my dumped sprite data I might be able to tell!
-    Mux s YN { yes = b `slice` (7,4), no = b `slice` (3,0) }
+{-
+  u_sprite_ram : RAMB16_S4_S4
+    port map (
+      -- write side, 1 clk later than original
+      DOA   => open,
+      DIA   => sprite_ram_ip,
+      ADDRA => sprite_ram_addr_t1,
+      WEA   => vout_obj_on_t1,
+      ENA   => ENA_6,
+      SSRA  => '0',
+      CLKA  => CLK,
+      -- read side
+      DOB   => sprite_ram_op,
+      DIB   => "0000",
+      ADDRB => sprite_ram_addr,
+      WEB   => '0',
+      ENB   => ENA_6,
+      SSRB  => '0',
+      CLKB  => CLK
+      );
 -}
+  -- read side of sprite_ram
+  sprite_ram_op :: E B4 <- do
+    byte <- ReadRam sprite_ram sprite_ram_addr
+    pure $ byte `slice` (3,0)
 
+{-
+  p_sprite_ram_op_comb : process(sprite_ram_op, vout_obj_on_t1)
+  begin
+    if vout_obj_on_t1 = '1' then
+      sprite_ram_reg <= sprite_ram_op;
+    else
+      sprite_ram_reg <= "0000";
+    end if;
+  end process;
+-}
   -- p_sprite_ram_op_comb
+  -- TODO: sprite_ram_reg is not registered. is that ok?
   sprite_ram_reg :: E B4 <- do
     Mux vout_obj_on_t1' YN { yes = sprite_ram_op, no = nibble0 }
 
+{-
+  p_video_op_sel_comb : process(sprite_ram_reg)
+  begin
+    video_op_sel <= '0'; -- no sprite
+    if not (sprite_ram_reg = "0000") then
+      video_op_sel <= '1';
+    end if;
+  end process;
+-}
   -- p_video_op_sel_comb
   video_op_sel :: E Bit <- do
     not <$> (sprite_ram_reg `isV` [B0,B0,B0,B0])
 
+{-
+  p_sprite_ram_ip_reg : process
+  begin
+    wait until rising_edge (CLK);
+    if (ENA_6 = '1') then
+      sprite_ram_addr_t1 <= sprite_ram_addr;
+      vout_obj_on_t1 <= vout_obj_on;
+      vout_hblank_t1 <= vout_hblank;
+      lut_4a_t1 <= lut_4a;
+    end if;
+  end process;
+-}
   do -- p_sprite_ram_ip_reg
     if_ ena_6 $ do
+      sprite_ram_addr_t1 <= sprite_ram_addr
       vout_obj_on_t1 <= vout_obj_on'
+      vout_hblank_t1 <= vout_hblank'
+      lut_4a_t1 <= lut_4a
 
-  -- Dont need to drive the write side of the sprite RAM
+{-
+  p_sprite_ram_ip_comb : process(vout_hblank_t1, video_op_sel, sprite_ram_reg, lut_4a_t1)
+  begin
+  -- 3a
+    if (vout_hblank_t1 = '0') then
+      sprite_ram_ip <= (others => '0');
+    else
+      if (video_op_sel = '1') then
+        sprite_ram_ip <= sprite_ram_reg;
+      else
+        sprite_ram_ip <= lut_4a_t1(3 downto 0);
+      end if;
+    end if;
+  end process;
+-}
   -- p_sprite_ram_ip_comb
-  -- sprite_ram_ip :: E B4 <- ...
+  sprite_ram_ip :: E B4 <- do
+    yes <- Mux video_op_sel YN { yes = sprite_ram_reg
+                               , no = lut_4a_t1' `slice` (3,0) }
+    Mux vout_hblank_t1' YN { yes, no = nibble0 }
 
+  -- write side of sprite_ram
+  do
+    WriteRam sprite_ram sprite_ram_addr_t1' (nibble0 & sprite_ram_ip)
+
+{-
+  p_video_op_comb : process(vout_hblank, I_VBLANK, video_op_sel, sprite_ram_reg, lut_4a)
+  begin
+      -- 3b
+    if (vout_hblank = '1') or (I_VBLANK = '1') then
+      final_col <= (others => '0');
+    else
+      if (video_op_sel = '1') then
+        final_col <= sprite_ram_reg; -- sprite
+      else
+        final_col <= lut_4a(3 downto 0);
+      end if;
+    end if;
+  end process;
+-}
   -- p_video_op_comb
   final_col :: E B4 <- do
     cond <- vout_hblank' `or` i_vblank
     v <- Mux video_op_sel YN { yes = sprite_ram_reg
                              , no = lut_4a `slice` (3,0) }
     Mux cond YN { yes = nibble0, no = v }
+
 
   -- col_rom_7f
   lut_7f :: E B8 <- do
