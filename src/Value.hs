@@ -22,10 +22,10 @@ data XY a = XY { x :: a, y :: a } deriving (Eq,Ord,Functor,Generic,NFData)
 data RGB a = RGB { r :: a, g :: a, b :: a } deriving (Functor,Generic,NFData)
 newtype Size = Size { size :: Int } deriving newtype (Eq,Ord,Num,NFData)
 
-data ScreenSpec = ScreenSpec { sf ::Int, size :: XY Int }
+data ScreenSpec = ScreenSpec { sf ::Int, size :: XY Int, emuSecsPerFrame :: Double }
 
 defaultScreenSpec :: ScreenSpec
-defaultScreenSpec = ScreenSpec { sf = 2, size = XY { x= 256, y = 256 } }
+defaultScreenSpec = ScreenSpec { sf = 2, size = XY { x= 256, y = 256 }, emuSecsPerFrame = 1.0/60 }
 
 instance Show Bit where show = \case B0 -> "0"; B1 -> "1"
 instance Show a => Show (XY a) where show XY{x,y} = show (x,y)

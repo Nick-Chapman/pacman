@@ -23,12 +23,26 @@ theVideoSystem = do
   DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
   let x = 224 -- (28*8)
   let y = 288 -- (36*8)
-  let ss = defaultScreenSpec { sf = 3, size = XY { x, y } }
+
+  let hTicks = 384 --y
+  let vTicks = 264 --x
+  let nTicksFull = hTicks * vTicks
+
+  -- we are currently too slow to display a full frame at once
+  -- so instead we display n/264 of a frame, for a given value of n
+  let n = 10
+  let nTicksPartial = hTicks * n
+  let fi = fromIntegral
+  let frameFraction :: Double = fi nTicksPartial / fi nTicksFull
+
+  let ss = defaultScreenSpec { sf = 3, size = XY { x, y }
+                             , emuSecsPerFrame = 1.0 / 60 * frameFraction }
+
   FrameEffect ss $ do
    loadDump dump rams
    loadSpriteDump rams
 
-   Repeat 384 $ do -- TODO: needs to be 384*264 (every 1/60s frame) !
+   Repeat nTicksPartial $ do
 
     let ena_6 :: E Bit = b1
 

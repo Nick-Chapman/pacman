@@ -2,13 +2,16 @@ module EmulateWithSdl (main) where
 
 import Code (Code,State,Keys(..),Picture(..))
 import Control.Concurrent (threadDelay)
-import Control.Monad (when)
 import Control.DeepSeq (deepseq)
+import Control.Monad (when)
 import Data.List.Extra (groupSort)
 import Data.Map (Map)
 import Foreign.C.Types (CInt)
+import GHC.Int (Int64)
 import Prelude hiding (init)
 import SDL (Renderer,Rectangle(..),V2(..),V4(..),Point(P),($=))
+import System.Clock (TimeSpec(..),getTime,Clock(Monotonic))
+import Text.Printf (printf)
 import Value (ScreenSpec(..),Key(..),XY(..),RGB(..))
 import qualified Code (initialize,runForOneFrame)
 import qualified Data.Map.Strict as Map
@@ -16,7 +19,12 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text (pack)
 import qualified SDL
 
-data World = World { state :: State, keys :: Keys, frame :: Int}
+data World = World
+  { state :: State
+  , keys :: Keys
+  , frame :: Int
+  , accNanos :: Int64
+  }
 
 main :: Code -> Bool -> IO ()
 main code accpix = do
@@ -33,22 +41,26 @@ main code accpix = do
   renderer <- SDL.createRenderer win (-1) SDL.defaultRenderer
   let assets = DrawAssets { renderer, ss, offset, accpix }
   let keys = Keys { pressed = Set.empty }
-  let world0 = World { state, keys, frame = 0 }
+  let world0 = World { state, keys, frame = 0, accNanos = 0 }
   let
     loop :: World -> IO ()
-    loop World{state,keys,frame} = do
-      --when (frame == 1) $ error "STOP"
-      putStrLn $ "frame: " ++ show frame
-      x <- Code.runForOneFrame prog context state keys
-      let! (picture,state) = x `deepseq` x
-      --putStrLn $ "frame: " ++ show frame ++ ", emulating...done"
+    loop World{state,keys,frame,accNanos} = do
+
+      (res,xNanos) <- measureNanos $ do
+        x <- Code.runForOneFrame prog context state keys
+        pure $ x `deepseq` x
+
+      let (picture,state) = res
       drawEverything assets picture
       events <- SDL.pollEvents
       let interesting = [ i | e <- events, i <- interestingOf e ]
       if Quit `elem` interesting then pure () else do --quit
       keys <- pure $ foldl insertInteresting keys interesting
       let _ = threadDelay (1000000 `div` 60) -- 1/60 sec
-      loop World { state, keys, frame = frame+1 }
+
+      let world = World { state, keys, frame = frame+1, accNanos = accNanos + xNanos }
+      printStatLine ss world
+      loop world
 
   setColor renderer darkGrey
   SDL.clear renderer
@@ -57,6 +69,32 @@ main code accpix = do
   SDL.destroyRenderer renderer
   SDL.destroyWindow win
   SDL.quit
+
+
+printStatLine :: ScreenSpec -> World -> IO ()
+printStatLine ScreenSpec{emuSecsPerFrame} World{frame,accNanos} = do
+  let
+    gig :: Double = 1_000_000_000
+    -- a real frame should take 1/60s, but we are only doing 1/264 of that
+    -- this info should come from the system under emu
+    emulatedSecs = fromIntegral frame * emuSecsPerFrame
+    elaspedSecs = fromIntegral accNanos / gig
+    --speedup = emulatedSecs / elaspedSecs
+    slowdown = elaspedSecs / emulatedSecs
+    line =
+      printf "frame: %d, emuSecs: %.03f, slowdown: x %.f"
+      frame emulatedSecs slowdown
+  putStrLn line
+
+measureNanos :: IO a -> IO (a, Int64)
+measureNanos io = do
+  before <- getTime Monotonic
+  a <- io
+  after <- getTime Monotonic
+  let TimeSpec{sec,nsec} = after - before
+  let nanos = gig * sec + nsec
+  return (a,nanos)
+  where gig = 1_000_000_000
 
 
 data InterestingEvent = Press Key | Release Key | Quit deriving Eq
