@@ -497,6 +497,10 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
           ra1 <- Plus ra' byte1
           SetReg ra ra1
 
+  -- TODO: The sprite_ram stuff need complelt reworking, for now, disable
+  sprite_ram_op :: E B4 <- do
+    pure nibble0
+{-
   sprite_ram_addr :: E B12 <- do
     pure $ bits [b0,b0,b0,b0] & ra'
 
@@ -505,7 +509,6 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- The original was a ram of 32 nibbles. 5 bit address, 4 bit data-out
   -- Here I use a ram of 16 bytes, and select either the hi/lo nibble
-  sprite_ram_op :: E B4 <- do
     let a = sprite_ram_addr `slice` (4,1)
     b <- do
       read <- ReadRam sprite_ram a
@@ -515,9 +518,9 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
     -- TODO: which way around are the nibbles addressed by the LSB ?
     -- when I actually load my dumped sprite data I might be able to tell!
     Mux s YN { yes = b `slice` (7,4), no = b `slice` (3,0) }
+-}
 
   -- p_sprite_ram_op_comb
-  -- BUG? this dont look like a register?
   sprite_ram_reg :: E B4 <- do
     Mux vout_obj_on_t1' YN { yes = sprite_ram_op, no = nibble0 }
 
