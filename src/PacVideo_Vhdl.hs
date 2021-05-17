@@ -13,7 +13,7 @@ import Value
 theVideoSystem :: System
 theVideoSystem = do
   withRoms $ \roms -> do
-  withRams $ \rams@Rams{vram} -> do
+  withRams $ \rams@Rams{ram} -> do
   withRegisters $ \registers -> do
   withVideoTimingRegs $ \vtRegs -> do
   DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
@@ -45,8 +45,7 @@ theVideoSystem = do
     -- u_rams
     rams_data_out <-
       --ReadRam vram (bits [b0] & (i_ab `slice` (9,0))) -- BUG#6, hacked vram read addr was wrong
-      ReadRam vram (i_ab `slice` (10,0))
-      -- ReadRam ram i_ab -- TODO: handle all ram as one
+      ReadRam ram i_ab
 
     -- sometimes it can be the cpu_data out, but we're not modelling the cpu here
     let sync_bus_db = rams_data_out
@@ -66,11 +65,11 @@ theVideoSystem = do
 
 
 loadDump :: RomId -> Rams -> Eff () -- TODO: dev idea. read direct from dump
-loadDump dump Rams{vram} = do
+loadDump dump Rams{ram} = do
   sequence_ [ do
                 b <- ReadRomByte dump (eSized 11 i)
                 --let b = eSized 8 1 -- pick a specific tile for debug
-                WriteRam vram (eSized 11 i) b
+                WriteRam ram (eSized 11 i) b
             | i <- [0..2047]]
 
 
@@ -284,14 +283,14 @@ withRoms f = do
 
 data Rams = Rams
   { sprite_xy_ram :: RamId
-  , vram :: RamId
+  , ram :: RamId
   }
 
 withRams :: (Rams -> System) -> System
 withRams f = do
   DeclareRam 16 $ \sprite_xy_ram -> do
-  DeclareRam 2048 $ \vram -> do -- TODO: combine vram into all ram
-  f Rams { sprite_xy_ram, vram }
+  DeclareRam 4096 $ \ram -> do
+  f Rams { sprite_xy_ram, ram }
 
 data Registers = Registers
   { char_sum_reg :: Reg B4
