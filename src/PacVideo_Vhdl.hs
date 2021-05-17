@@ -22,6 +22,7 @@ theVideoSystem = do
   let ss = defaultScreenSpec { sf = 3, size = XY { x, y } }
   FrameEffect ss $ do
    loadDump dump rams
+   let _ = loadSpriteDump rams -- TODO
 
    Repeat 384 $ do -- TODO: needs to be 384*264 (every 1/60s frame) !
 
@@ -70,6 +71,23 @@ loadDump dump Rams{vram} = do
                 --let b = eSized 8 1 -- pick a specific tile for debug
                 WriteRam vram (eSized 11 i) b
             | i <- [0..2047]]
+
+
+loadSpriteDump :: Rams -> Eff ()
+loadSpriteDump Rams{sprite_ram,sprite_xy_ram} = do
+  sequence_ [ do WriteRam sprite_ram (eSized 4 i) (eSized 8 b)
+            | (i,b) <- zip [0..] info
+            ]
+  sequence_ [ do WriteRam sprite_xy_ram (eSized 4 i) (eSized 8 b)
+            | (i,b) <- zip [0..] xys
+            ]
+  where
+    info = [ 0x00, 0x00, 0x94, 0x01, 0x94, 0x03, 0x8c, 0x05
+           , 0x8c, 0x07, 0xb8, 0x09, 0xfc, 0x00, 0x00, 0x00 ]
+
+    xys = [ 0x00, 0x00, 0xb6, 0x8c, 0xa1, 0xa4, 0x97, 0x8e
+          , 0x77, 0x8e, 0xa3, 0x2c, 0x07, 0x08, 0x00, 0x00 ]
+
 
 
 {-
@@ -283,6 +301,7 @@ data Registers = Registers
   , db_reg :: Reg B8
   , shift_regl :: Reg B4
   , shift_regu :: Reg B4
+  , sprite_xy_ram_temp :: Reg B8
   , vout_obj_on :: Reg Bit
   , vout_yflip :: Reg Bit
   , vout_hblank :: Reg Bit
@@ -300,6 +319,7 @@ withRegisters f = do
   DeclareReg "db_reg" (Size 8) $ \db_reg -> do
   DeclareReg "shift_regl" (Size 4) $ \shift_regl -> do
   DeclareReg "shift_regu" (Size 4) $ \shift_regu -> do
+  DeclareReg "sprite_xy_ram_temp" (Size 8) $ \sprite_xy_ram_temp -> do
   DeclareReg1 "vout_obj_on" $ \vout_obj_on -> do
   DeclareReg1 "vout_yflip" $ \vout_yflip -> do
   DeclareReg1 "vout_hblank" $ \vout_hblank -> do
@@ -314,6 +334,7 @@ withRegisters f = do
       , db_reg
       , shift_regl
       , shift_regu
+      , sprite_xy_ram_temp
       , vout_obj_on
       , vout_yflip
       , vout_hblank
@@ -337,6 +358,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
   ra' <- GetReg ra
   shift_regl' <- GetReg shift_regl
   shift_regu' <- GetReg shift_regu
+  sprite_xy_ram_temp' <- GetReg sprite_xy_ram_temp
   video_out' <- GetReg video_out
   vout_db' <- GetReg vout_db
   vout_hblank' <- GetReg vout_hblank
@@ -347,14 +369,16 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
   -- Seems the write into the sprit ram comes via here; let's ignore that
   -- sprite_xy_ram_wen :: E Bit <- not i_wr2_l `and` ena_6
 
+  -- BUG#5, read from sprite_xy_ram should be registered
   -- sprite_xy_ram
-  sprite_xy_ram_temp :: E B8 <-
-    ReadRam sprite_xy_ram (i_ab `slice` (3,0)) -- TODO: check direction!
+  do
+    dpo <- ReadRam sprite_xy_ram (i_ab `slice` (3,0))
+    sprite_xy_ram_temp <= dpo
 
   -- p_sprite_ram_comb
   dr :: E B8 <- do
     Mux i_hblank
-      YN { yes = notV sprite_xy_ram_temp
+      YN { yes = notV sprite_xy_ram_temp'
          , no = bits (replicate 8 b1) }
 
   do -- p_char_regs
@@ -486,18 +510,20 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
     b <- do
       read <- ReadRam sprite_ram a
       Mux ena_6 YN{ yes = read, no = nibble0 }
+    --Trace "sprite_ram (a,b)" [a,b]
     let s = sprite_ram_addr `index` 0
     -- TODO: which way around are the nibbles addressed by the LSB ?
     -- when I actually load my dumped sprite data I might be able to tell!
     Mux s YN { yes = b `slice` (7,4), no = b `slice` (3,0) }
 
   -- p_sprite_ram_op_comb
+  -- BUG? this dont look like a register?
   sprite_ram_reg :: E B4 <- do
     Mux vout_obj_on_t1' YN { yes = sprite_ram_op, no = nibble0 }
 
   -- p_video_op_sel_comb
   video_op_sel :: E Bit <- do
-    not <$> sprite_ram_reg `isV` [B0,B0,B0,B0]
+    not <$> (sprite_ram_reg `isV` [B0,B0,B0,B0])
 
   do -- p_sprite_ram_ip_reg
     if_ ena_6 $ do
@@ -533,7 +559,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
 ----------------------------------------------------------------------
 -- | vram address custom ic: 'pacman_vram_addr.vhd'
 
-pacman_vram_addr :: E B8 -> E B9 -> Eff (E B12)
+pacman_vram_addr :: E B9 -> E B8 -> Eff (E B12)
 pacman_vram_addr h v = do
 
   let flip = b0 -- TODO: connect to the emulator keyboard
