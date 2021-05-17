@@ -22,7 +22,7 @@ theVideoSystem = do
   let ss = defaultScreenSpec { sf = 3, size = XY { x, y } }
   FrameEffect ss $ do
    loadDump dump rams
-   --loadSpriteDump rams
+   loadSpriteDump rams
 
    Repeat 384 $ do -- TODO: needs to be 384*264 (every 1/60s frame) !
 
@@ -73,21 +73,21 @@ loadDump dump Rams{ram} = do
             | i <- [0..2047]]
 
 
-{-loadSpriteDump :: Rams -> Eff ()
-loadSpriteDump Rams{sprite_ram,sprite_xy_ram} = do
-  sequence_ [ do WriteRam sprite_ram (eSized 4 i) (eSized 8 b)
-            | (i,b) <- zip [0..] info
+loadSpriteDump :: Rams -> Eff ()
+loadSpriteDump Rams{ram,sprite_xy_ram} = do
+  sequence_ [ do WriteRam ram (eSized 12 i) (eSized 8 b)
+            | (i,b) <- zip [infoBaseAddr..] info
             ]
   sequence_ [ do WriteRam sprite_xy_ram (eSized 4 i) (eSized 8 b)
             | (i,b) <- zip [0..] xys
             ]
   where
+    infoBaseAddr = 4096 - 16
     info = [ 0x00, 0x00, 0x94, 0x01, 0x94, 0x03, 0x8c, 0x05
            , 0x8c, 0x07, 0xb8, 0x09, 0xfc, 0x00, 0x00, 0x00 ]
 
     xys = [ 0x00, 0x00, 0xb6, 0x8c, 0xa1, 0xa4, 0x97, 0x8e
           , 0x77, 0x8e, 0xa3, 0x2c, 0x07, 0x08, 0x00, 0x00 ]
--}
 
 
 {-
