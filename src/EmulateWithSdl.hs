@@ -46,12 +46,12 @@ main code accpix = do
     loop :: World -> IO ()
     loop World{state,keys,frame,accNanos} = do
 
-      (res,xNanos) <- measureNanos $ do
+      (state,xNanos) <- measureNanos $ do
         x <- Code.runForOneFrame prog context state keys
-        pure $ x `deepseq` x
+        let (picture,state) = x `deepseq` x
+        drawEverything assets picture
+        pure state
 
-      let (picture,state) = res
-      drawEverything assets picture
       events <- SDL.pollEvents
       let interesting = [ i | e <- events, i <- interestingOf e ]
       if Quit `elem` interesting then pure () else do --quit
@@ -77,13 +77,13 @@ printStatLine ScreenSpec{emuSecsPerFrame} World{frame,accNanos} = do
     gig :: Double = 1_000_000_000
     -- a real frame should take 1/60s, but we are only doing 1/264 of that
     -- this info should come from the system under emu
-    emulatedSecs = fromIntegral frame * emuSecsPerFrame
-    elaspedSecs = fromIntegral accNanos / gig
+    emulatedSecs :: Double = fromIntegral frame * emuSecsPerFrame
+    elaspedSecs :: Double = fromIntegral accNanos / gig
     --speedup = emulatedSecs / elaspedSecs
     slowdown = elaspedSecs / emulatedSecs
     line =
-      printf "frame: %d, emuSecs: %.03f, slowdown: x %.f"
-      frame emulatedSecs slowdown
+      printf "%d, emu %.03f, elap %.03f, slowX %.f"
+      frame emulatedSecs elaspedSecs slowdown
   putStrLn line
 
 measureNanos :: IO a -> IO (a, Int64)
