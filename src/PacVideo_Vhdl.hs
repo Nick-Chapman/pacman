@@ -22,7 +22,7 @@ theVideoSystem = do
   let ss = defaultScreenSpec { sf = 3, size = XY { x, y } }
   FrameEffect ss $ do
    loadDump dump rams
-   let _ = loadSpriteDump rams -- TODO
+   --loadSpriteDump rams
 
    Repeat 384 $ do -- TODO: needs to be 384*264 (every 1/60s frame) !
 
@@ -43,8 +43,10 @@ theVideoSystem = do
     let i_ab = vram_addr_ab
 
     -- u_rams
-    rams_data_out <- -- TODO: check this
-      ReadRam vram (bits [b0] & (i_ab `slice` (9,0)))
+    rams_data_out <-
+      --ReadRam vram (bits [b0] & (i_ab `slice` (9,0))) -- BUG#6, hacked vram read addr was wrong
+      ReadRam vram (i_ab `slice` (10,0))
+      -- ReadRam ram i_ab -- TODO: handle all ram as one
 
     -- sometimes it can be the cpu_data out, but we're not modelling the cpu here
     let sync_bus_db = rams_data_out
@@ -63,7 +65,6 @@ theVideoSystem = do
     drivePixel inputs outputs
 
 
--- TODO: need to also load 2x sprite rams (xy,info)
 loadDump :: RomId -> Rams -> Eff () -- TODO: dev idea. read direct from dump
 loadDump dump Rams{vram} = do
   sequence_ [ do
@@ -73,7 +74,7 @@ loadDump dump Rams{vram} = do
             | i <- [0..2047]]
 
 
-loadSpriteDump :: Rams -> Eff ()
+{-loadSpriteDump :: Rams -> Eff ()
 loadSpriteDump Rams{sprite_ram,sprite_xy_ram} = do
   sequence_ [ do WriteRam sprite_ram (eSized 4 i) (eSized 8 b)
             | (i,b) <- zip [0..] info
@@ -87,7 +88,7 @@ loadSpriteDump Rams{sprite_ram,sprite_xy_ram} = do
 
     xys = [ 0x00, 0x00, 0xb6, 0x8c, 0xa1, 0xa4, 0x97, 0x8e
           , 0x77, 0x8e, 0xa3, 0x2c, 0x07, 0x08, 0x00, 0x00 ]
-
+-}
 
 
 {-
@@ -282,17 +283,15 @@ withRoms f = do
       declareRom path size f = do DeclareRom (RomSpec { path, size }) $ f
 
 data Rams = Rams
-  { sprite_xy_ram :: RamId -- sprite position
-  , sprite_ram :: RamId    -- sprint selection + 2 bits flip
+  { sprite_xy_ram :: RamId
   , vram :: RamId
   }
 
 withRams :: (Rams -> System) -> System
 withRams f = do
   DeclareRam 16 $ \sprite_xy_ram -> do
-  DeclareRam 16 $ \sprite_ram -> do
-  DeclareRam 2048 $ \vram -> do
-  f Rams { sprite_xy_ram, sprite_ram, vram }
+  DeclareRam 2048 $ \vram -> do -- TODO: combine vram into all ram
+  f Rams { sprite_xy_ram, vram }
 
 data Registers = Registers
   { char_sum_reg :: Reg B4
@@ -497,7 +496,7 @@ pacman_video Roms{..} Rams{..} Registers{..} Inputs{..} = do
           ra1 <- Plus ra' byte1
           SetReg ra ra1
 
-  -- TODO: The sprite_ram stuff need complelt reworking, for now, disable
+  -- TODO: The sprite_ram stuff needs reworking, for now, disable
   sprite_ram_op :: E B4 <- do
     pure nibble0
 {-
