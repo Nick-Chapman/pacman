@@ -503,78 +503,23 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
           ra1 <- Plus ra' byte1
           SetReg ra ra1
 
-{-
-      sprite_ram_addr <= "0000" & ra
--}
   sprite_ram_addr :: E B12 <- do
     pure $ bits [b0,b0,b0,b0] & ra'
 
-{-
-  u_sprite_ram : RAMB16_S4_S4
-    port map (
-      -- write side, 1 clk later than original
-      DOA   => open,
-      DIA   => sprite_ram_ip,
-      ADDRA => sprite_ram_addr_t1,
-      WEA   => vout_obj_on_t1,
-      ENA   => ENA_6,
-      SSRA  => '0',
-      CLKA  => CLK,
-      -- read side
-      DOB   => sprite_ram_op,
-      DIB   => "0000",
-      ADDRB => sprite_ram_addr,
-      WEB   => '0',
-      ENB   => ENA_6,
-      SSRB  => '0',
-      CLKB  => CLK
-      );
--}
-  -- read side of sprite_ram
+  -- u_sprite_ram (read side)
   sprite_ram_op :: E B4 <- do
     byte <- ReadRam sprite_ram sprite_ram_addr
     pure $ byte `slice` (3,0)
 
-{-
-  p_sprite_ram_op_comb : process(sprite_ram_op, vout_obj_on_t1)
-  begin
-    if vout_obj_on_t1 = '1' then
-      sprite_ram_reg <= sprite_ram_op;
-    else
-      sprite_ram_reg <= "0000";
-    end if;
-  end process;
--}
   -- p_sprite_ram_op_comb
   -- TODO: sprite_ram_reg is not registered. is that ok?
   sprite_ram_reg :: E B4 <- do
     Mux vout_obj_on_t1' YN { yes = sprite_ram_op, no = nibble0 }
 
-{-
-  p_video_op_sel_comb : process(sprite_ram_reg)
-  begin
-    video_op_sel <= '0'; -- no sprite
-    if not (sprite_ram_reg = "0000") then
-      video_op_sel <= '1';
-    end if;
-  end process;
--}
   -- p_video_op_sel_comb
   video_op_sel :: E Bit <- do
     not <$> (sprite_ram_reg `isV` [B0,B0,B0,B0])
 
-{-
-  p_sprite_ram_ip_reg : process
-  begin
-    wait until rising_edge (CLK);
-    if (ENA_6 = '1') then
-      sprite_ram_addr_t1 <= sprite_ram_addr;
-      vout_obj_on_t1 <= vout_obj_on;
-      vout_hblank_t1 <= vout_hblank;
-      lut_4a_t1 <= lut_4a;
-    end if;
-  end process;
--}
   do -- p_sprite_ram_ip_reg
     if_ ena_6 $ do
       sprite_ram_addr_t1 <= sprite_ram_addr
@@ -582,55 +527,24 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
       vout_hblank_t1 <= vout_hblank'
       lut_4a_t1 <= lut_4a
 
-{-
-  p_sprite_ram_ip_comb : process(vout_hblank_t1, video_op_sel, sprite_ram_reg, lut_4a_t1)
-  begin
-  -- 3a
-    if (vout_hblank_t1 = '0') then
-      sprite_ram_ip <= (others => '0');
-    else
-      if (video_op_sel = '1') then
-        sprite_ram_ip <= sprite_ram_reg;
-      else
-        sprite_ram_ip <= lut_4a_t1(3 downto 0);
-      end if;
-    end if;
-  end process;
--}
   -- p_sprite_ram_ip_comb
   sprite_ram_ip :: E B4 <- do
     yes <- Mux video_op_sel YN { yes = sprite_ram_reg
                                , no = lut_4a_t1' `slice` (3,0) }
     Mux vout_hblank_t1' YN { yes, no = nibble0 }
 
-  -- write side of sprite_ram
+  -- u_sprite_ram (write side)
   do
     -- BUG #7 -- forgot the write-enable. Adding this fixes the replication bug.
     if_ vout_obj_on_t1' $
       WriteRam sprite_ram sprite_ram_addr_t1' (nibble0 & sprite_ram_ip)
 
-{-
-  p_video_op_comb : process(vout_hblank, I_VBLANK, video_op_sel, sprite_ram_reg, lut_4a)
-  begin
-      -- 3b
-    if (vout_hblank = '1') or (I_VBLANK = '1') then
-      final_col <= (others => '0');
-    else
-      if (video_op_sel = '1') then
-        final_col <= sprite_ram_reg; -- sprite
-      else
-        final_col <= lut_4a(3 downto 0);
-      end if;
-    end if;
-  end process;
--}
   -- p_video_op_comb
   final_col :: E B4 <- do
     cond <- vout_hblank' `or` i_vblank
     v <- Mux video_op_sel YN { yes = sprite_ram_reg
                              , no = lut_4a `slice` (3,0) }
     Mux cond YN { yes = nibble0, no = v }
-
 
   -- col_rom_7f
   lut_7f :: E B8 <- do
