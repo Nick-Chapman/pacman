@@ -37,6 +37,7 @@ data Eff a where
   GetReg :: Reg a -> Eff (E a)
   SetReg :: Show a => Reg a -> E a -> Eff ()
   And :: E Bit -> E Bit -> Eff (E Bit)
+  Xor :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
   Minus :: E Nat -> E Nat -> Eff (E Nat)
   Less :: E Nat -> E Nat -> Eff (E Bit)
@@ -256,6 +257,14 @@ compile0 roms eff0 = do
             share1 s oper $ \s tmp ->
               k s (E_Tmp tmp)
 
+      Xor e1 e2 -> do
+        case (trySimpXor (e1,e2)) of
+          Just e -> k s e
+          Nothing -> do
+            let oper = O_Xor e1 e2
+            share1 s oper $ \s tmp ->
+              k s (E_Tmp tmp)
+
       ReadRom rid a -> do
         case (a,Map.lookup rid roms) of
           (E_Nat a, Just rom) -> k s (E_Nat (readRom rom a))
@@ -292,6 +301,15 @@ trySimpAnd = \case
   (_, z@(E_Lit _ B0)) -> Just z
   (E_Lit _ B1, x) -> Just x
   (x, E_Lit _ B1) -> Just x
+  _ ->
+    Nothing
+
+trySimpXor :: (E Bit, E Bit) -> Maybe (E Bit)
+trySimpXor = \case
+  (E_Lit _ B0, x) -> Just x
+  (x, E_Lit _ B0) -> Just x
+  (E_Lit _ B1, x) -> Just (eNot x)
+  (x, E_Lit _ B1) -> Just (eNot x)
   _ ->
     Nothing
 

@@ -58,6 +58,7 @@ data Step where
 data Oper a where
   O_Reg :: Reg a -> Oper a
   O_And :: E Bit -> E Bit -> Oper Bit
+  O_Xor :: E Bit -> E Bit -> Oper Bit
   O_Plus :: E Nat -> E Nat -> Oper Nat
   O_Minus :: E Nat -> E Nat -> Oper Nat
   O_Less :: E Nat -> E Nat -> Oper Bit
@@ -205,6 +206,7 @@ updateReg s@State{regs} val = \case
 evalOper :: RS -> Oper a -> a
 evalOper rs@RS{context=Context{roms},state=State{regs,rams}} = \case
   O_And e1 e2 -> andBit (evalE rs e1) (evalE rs e2)
+  O_Xor e1 e2 -> xorBit (evalE rs e1) (evalE rs e2)
   O_Plus e1 e2 -> plusNat (evalE rs e1) (evalE rs e2)
   O_Minus e1 e2 -> minusNat (evalE rs e1) (evalE rs e2)
   O_Less e1 e2 -> lessNat (evalE rs e1) (evalE rs e2)
@@ -333,6 +335,7 @@ sizeOfTmp = \case
 instance Show a => Show (Oper a) where
   show = \case
     O_And e1 e2 -> show e1 ++ " & " ++ show e2
+    O_Xor e1 e2 -> show e1 ++ " ^ " ++ show e2
     O_Plus e1 e2 -> show e1 ++ " + " ++ show e2
     O_Minus e1 e2 -> show e1 ++ " - " ++ show e2
     O_Less e1 e2 -> show e1 ++ " < " ++ show e2

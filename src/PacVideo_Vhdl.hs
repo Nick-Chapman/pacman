@@ -725,10 +725,11 @@ or x y = do
   pure $ not w
 
 xor :: E Bit -> E Bit -> Eff (E Bit)
-xor x y = do
+xor = Xor
+{-xor x y = do
   w1 <- And x (not y)
   w2 <- And (not x) y
-  w1 `or` w2
+  w1 `or` w2-}
 
 ----------------------------------------------------------------------
 -- other opps

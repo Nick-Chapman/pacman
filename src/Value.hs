@@ -1,6 +1,6 @@
 module Value (
   YN(..), XY(..), RGB(..), Key(..), Nat, Bit(..), Size(..), ScreenSpec(..),
-  checkSize, isBit1, andBit, notBit, indexBits,
+  checkSize, isBit1, andBit, xorBit, notBit, indexBits,
   sizedNat, nat2int, plusNat, minusNat, sizeOfNat, isZeroNat, lessNat,
   defaultScreenSpec,
   ) where
@@ -42,6 +42,11 @@ andBit :: Bit -> Bit -> Bit
 andBit = \case
   B0 -> \_ -> B0
   B1 -> \x -> x
+
+xorBit :: Bit -> Bit -> Bit
+xorBit = \case
+  B0 -> \x -> x
+  B1 -> \x -> notBit x
 
 checkSize :: Size -> [Bit] -> [Bit]
 checkSize Size{size} xs =
