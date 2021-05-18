@@ -1,7 +1,7 @@
 module Value (
   YN(..), XY(..), RGB(..), Key(..), Nat, Bit(..), Size(..), ScreenSpec(..),
   checkSize, isBit1, andBit, xorBit, notBit, indexBits,
-  sizedNat, nat2int, plusNat, minusNat, sizeOfNat, isZeroNat, lessNat,
+  sizedNat, nat2int, plusNat, minusNat, sizeOfNat, isZeroNat, lessNat, xorNat,
   defaultScreenSpec,
   ) where
 
@@ -106,3 +106,6 @@ isZeroNat n = if nat2int n == 0 then B1 else B0
 lessNat :: Nat -> Nat -> Bit
 lessNat x y = do
   if (nat2int x < nat2int y) then B1 else B0
+
+xorNat :: Nat -> Nat -> Nat
+xorNat xs ys = [ xorBit x y | (x,y) <- zip xs ys ]

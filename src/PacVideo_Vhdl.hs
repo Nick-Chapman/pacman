@@ -686,16 +686,15 @@ slice e (high,low) =
 (&) :: E [Bit] -> E [Bit] -> E [Bit]
 (&) e1 e2 = combine (split e1 ++ split e2)
 
--- constant equality test for vectors
--- TODO: better to use a bitwise xor with a constant
 isV :: E [Bit] -> [Bit] -> Eff (E Bit)
-isV es bs =
-  allBitsSet (combine [ isB e b | (e,b) <- zipChecked (split es) bs ])
+isV es bs = do
+  xs <- es `XorBitwise` combine (map (eLit 1) bs)
+  IsZero xs
 
-isB :: E Bit -> Bit -> E Bit
-isB e = \case
-  B0 -> not e
-  B1 -> e
+{-
+_isV :: E [Bit] -> [Bit] -> Eff (E Bit)
+_isV es bs =
+  allBitsSet (combine [ isB e b | (e,b) <- zipChecked (split es) bs ])
 
 zipChecked :: [a] -> [b] -> [(a,b)]
 zipChecked xs ys = do
@@ -703,6 +702,12 @@ zipChecked xs ys = do
   let yn = length ys
   if xn /= yn then error (show ("zipChecked",xn,yn)) else
     zip xs ys
+-}
+
+isB :: E Bit -> Bit -> E Bit
+isB e = \case
+  B0 -> not e
+  B1 -> e
 
 allBitsSet :: E [Bit] -> Eff (E Bit) -- TODO: primitive?
 allBitsSet xs = IsZero (notV xs)

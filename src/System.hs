@@ -40,6 +40,7 @@ data Eff a where
   Xor :: E Bit -> E Bit -> Eff (E Bit)
   Plus :: E Nat -> E Nat -> Eff (E Nat)
   Minus :: E Nat -> E Nat -> Eff (E Nat)
+  XorBitwise :: E Nat -> E Nat -> Eff (E Nat)
   Less :: E Nat -> E Nat -> Eff (E Bit)
   IsZero :: E Nat -> Eff (E Bit)
   Mux :: E Bit -> YN (E [Bit])-> Eff (E [Bit])
@@ -228,6 +229,12 @@ compile0 roms eff0 = do
             let size = max (sizeE e1) (sizeE e2)
             shareV s size oper $ \s tmp ->
               k s (E_Tmp tmp)
+
+      XorBitwise e1 e2 -> do
+        let oper = O_XorBitwise e1 e2
+        let size = ensureSameSize oper (sizeE e1) (sizeE e2)
+        shareV s size oper $ \s tmp ->
+          k s (E_Tmp tmp)
 
       Less e1 e2 -> do
         let oper = O_Less e1 e2
