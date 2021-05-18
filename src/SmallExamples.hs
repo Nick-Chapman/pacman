@@ -31,7 +31,7 @@ increment r = do
 colSquare :: (Reg Nat, Reg Nat) -> RomId -> Reg Nat -> Eff ()
 colSquare rr colRom ri = do
   i <- GetReg ri
-  byte <- ReadRomByte colRom i
+  byte <- ReadRom colRom i
   Trace "SmallExample/cols, rom lookup" [i,byte]
   col <- decodeAsRGB byte
   let x = combine (split i ++ [b0,b0,b0,b0])

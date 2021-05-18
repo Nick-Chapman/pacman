@@ -42,7 +42,7 @@ data Eff a where
   Less :: E Nat -> E Nat -> Eff (E Bit)
   IsZero :: E Nat -> Eff (E Bit)
   Mux :: E Bit -> YN (E [Bit])-> Eff (E [Bit])
-  ReadRomByte :: RomId -> E Nat -> Eff (E Nat)
+  ReadRom :: RomId -> E Nat -> Eff (E Nat)
   ReadRam :: RamId -> E Nat -> Eff (E Nat)
   WriteRam :: RamId -> E Nat -> E Nat -> Eff ()
   Ite :: E Bit -> (Bit -> Eff ()) -> Eff ()
@@ -256,7 +256,7 @@ compile0 roms eff0 = do
             share1 s oper $ \s tmp ->
               k s (E_Tmp tmp)
 
-      ReadRomByte rid a -> do
+      ReadRom rid a -> do
         case (a,Map.lookup rid roms) of
           (E_Nat a, Just rom) -> k s (E_Nat (readRom rom a))
           _ -> do

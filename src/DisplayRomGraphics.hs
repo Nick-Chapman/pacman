@@ -7,7 +7,7 @@ import Value
 
 tiles :: System
 tiles = withMac $ \mac -> do
-  let ss = defaultScreenSpec { sf = 3, size = XY { x = 330, y = 256 } }
+  let ss = defaultScreenSpec { sf = 2, size = XY { x = 330, y = 256 } }
   FrameEffect ss $ do
     seeCols mac
     seePals mac
@@ -16,40 +16,12 @@ tiles = withMac $ \mac -> do
 
 screen :: System
 screen = withMac $ \mac -> do
-  DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
   let (x,y) = (256,288) -- bug in X! --(224,288) == (8*28, 8*36)
-  let ss = defaultScreenSpec { sf = 3, size = XY { x, y }}
+  let ss = defaultScreenSpec { sf = 2, size = XY { x, y }}
   FrameEffect ss $ do
-    loadDump dump mac
-    loadSpriteDump mac
     drawTiles mac
     sequence_ [drawSpriteIndex mac i | i <- [0..7]]
     pure ()
-
-loadDump :: RomId -> Mac -> Eff ()
-loadDump dump Mac{ram} = do
-  sequence_ [ do
-                b <- ReadRomByte dump (eSized 11 i)
-                WriteRam ram (eSized 16 (baseVideoRam + i)) b
-            |
-              i <- [0..2047]
-            ]
-
-loadSpriteDump :: Mac -> Eff ()
-loadSpriteDump Mac{spriteInfo,spriteXY} = do
-  sequence_ [ do WriteRam spriteInfo (eSized 4 i) (eSized 8 b)
-            | (i,b) <- zip [0..] info
-            ]
-  sequence_ [ do WriteRam spriteXY (eSized 4 i) (eSized 8 b)
-            | (i,b) <- zip [0..] xys
-            ]
-  where
-    info = [ 0x00, 0x00, 0x94, 0x01, 0x94, 0x03, 0x8c, 0x05
-           , 0x8c, 0x07, 0xb8, 0x09, 0xfc, 0x00, 0x00, 0x00 ]
-
-    xys = [ 0x00, 0x00, 0xb6, 0x8c, 0xa1, 0xa4, 0x97, 0x8e
-          , 0x77, 0x8e, 0xa3, 0x2c, 0x07, 0x08, 0x00, 0x00 ]
-
 
 withMac :: (Mac -> System) -> System
 withMac f =
@@ -57,19 +29,17 @@ withMac f =
   DeclareRom (RomSpec { path = "roms/82s126.4a", size = 256 }) $ \palRom -> do
   DeclareRom (RomSpec { path = "roms/pacman.5e", size = 4096 }) $ \tileRom -> do
   DeclareRom (RomSpec { path = "roms/pacman.5f", size = 4096 }) $ \spriteRom -> do
-  DeclareRam 0x4800 $ \ram -> do
-  DeclareRam 16 $ \spriteInfo -> do
-  DeclareRam 16 $ \spriteXY -> do
-  f (Mac { colRom, palRom, tileRom, spriteRom, ram, spriteInfo, spriteXY })
+  DeclareRom (RomSpec { path = "ram.dump", size = 4096 }) $ \ramDump -> do
+  DeclareRom (RomSpec { path = "xy.dump", size = 16 }) $ \xyDump -> do
+  f (Mac { colRom, palRom, tileRom, spriteRom, ramDump, xyDump})
 
 data Mac = Mac
   { colRom :: RomId
   , palRom :: RomId
   , tileRom :: RomId
   , spriteRom :: RomId
-  , ram :: RamId
-  , spriteInfo :: RamId
-  , spriteXY :: RamId
+  , ramDump :: RomId
+  , xyDump :: RomId
   }
 
 ----------------------------------------------------------------------
@@ -78,7 +48,7 @@ data Mac = Mac
 seeCols :: Mac -> Eff ()
 seeCols Mac{colRom} = sequence_
   [ do
-      b <- ReadRomByte colRom (eSized (Size 4) i)
+      b <- ReadRom colRom (eSized (Size 4) i)
       col <- decodeAsRGB b
       let xy = XY { x = nat8 (14 * i), y = nat8 0 }
       setSquare 14 xy col
@@ -143,11 +113,11 @@ setSquare width loc col = do
 
 -- draw a sprite selected and positioned by the spriteInfo/spriteXY rams
 drawSpriteIndex :: Mac -> Int -> Eff ()
-drawSpriteIndex mac@Mac{spriteInfo,spriteXY} i = do
-  info <- ReadRam spriteInfo (eSized 4 (0 + 2 * fromIntegral i))
-  palb <- ReadRam spriteInfo (eSized 4 (1 + 2 * fromIntegral i))
-  xLoc <- ReadRam spriteXY (eSized 4 (0 + 2 * fromIntegral i))
-  yLoc <- ReadRam spriteXY (eSized 4 (1 + 2 * fromIntegral i))
+drawSpriteIndex mac@Mac{ramDump,xyDump} i = do
+  info <- ReadRom ramDump (eSized 12 (0xff0 + 2 * fromIntegral i))
+  palb <- ReadRom ramDump (eSized 12 (0xff1 + 2 * fromIntegral i))
+  xLoc <- ReadRom xyDump (eSized 4 (0 + 2 * fromIntegral i))
+  yLoc <- ReadRom xyDump (eSized 4 (1 + 2 * fromIntegral i))
   palette <- readPalette mac (PaletteIndex (mod64 palb))
   let _yFlip = info `index` 0
   let _xFlip = info `index` 1
@@ -195,15 +165,12 @@ drawTiles mac = do
     [ drawTile mac xy i | (xy,i::Int) <- top ++ mid ++ bot ]
 
 
-baseVideoRam :: Int
-baseVideoRam = 0x4000
-
 -- draw a tile selected by the vram
 drawTile :: Mac -> XY Int -> Int -> Eff ()
-drawTile mac@Mac{ram} xy i = do
-  byteT <- ReadRam ram (eSized 16 (baseVideoRam + fromIntegral i))
+drawTile mac@Mac{ramDump} xy i = do
+  byteT <- ReadRom ramDump (eSized 16 (fromIntegral i))
   tile <- readTile mac (TI byteT)
-  byteP <- ReadRam ram (eSized 16 (baseVideoRam + 0x400 + fromIntegral i))
+  byteP <- ReadRom ramDump (eSized 16 (0x400 + fromIntegral i))
   let six = mod64 byteP
   let pi = PaletteIndex six
   palette <- readPalette mac pi
@@ -241,7 +208,7 @@ readSprite Mac{spriteRom} (SI i) = do
     readStrip off = do
       let i64 = times64 i -- 64 bytes per sprite
       a <- Plus i64 (eSized 6 off)
-      byte <- ReadRomByte spriteRom a
+      byte <- ReadRom spriteRom a
       pure $ decodeTileByte byte
   layer1 <- mapM readStrip (reverse ([8..8+7] ++ [32+8+0..32+8+7]))
   layer2 <- mapM readStrip (reverse ([16..16+7] ++ [32+16+0..32+16+7]))
@@ -278,7 +245,7 @@ readTile Mac{tileRom} (TI i) = do
     readStrip off = do
       let i16 = times16 i -- 16 bytes per tile
       a <- Plus i16 (eSized 4 off)
-      byte <- ReadRomByte tileRom a
+      byte <- ReadRom tileRom a
       pure $ decodeTileByte byte
   bot <- mapM readStrip (reverse [0..7])
   top <- mapM readStrip (reverse [8..15])
@@ -316,7 +283,7 @@ readPalette mac@Mac{palRom} (PaletteIndex i) = do
     readItem off = do
       let i4 = times4 i
       a <- Plus i4 (eSized 2 off)
-      byte <- ReadRomByte palRom a
+      byte <- ReadRom palRom a
       let ci = CI byte
       readColour mac ci
 
@@ -327,7 +294,7 @@ newtype ColourIndex = CI (E Nat)
 
 readColour :: Mac -> ColourIndex -> Eff (RGB (E Nat))
 readColour Mac{colRom} (CI i) = do
-  byte <- ReadRomByte colRom i
+  byte <- ReadRom colRom i
   decodeAsRGB byte
 
 decodeAsRGB :: E Nat -> Eff (RGB (E Nat))

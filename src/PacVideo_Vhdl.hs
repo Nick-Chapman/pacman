@@ -20,7 +20,6 @@ theVideoSystem = do
   -- TODO: An internal ram of 256 niblles ?!?
   DeclareRam 256 $ \sprite_ram -> do
 
-  DeclareRom (RomSpec { path = "dump", size = 2048 }) $ \dump -> do
   let x = 224 -- (28*8)
   let y = 288 -- (36*8)
 
@@ -35,12 +34,10 @@ theVideoSystem = do
   let fi = fromIntegral
   let frameFraction :: Double = fi nTicksPartial / fi nTicksFull
 
-  let ss = defaultScreenSpec { sf = 3, size = XY { x, y }
+  let ss = defaultScreenSpec { sf = 2, size = XY { x, y }
                              , emuSecsPerFrame = 1.0 / 60 * frameFraction }
 
   FrameEffect ss $ do
-   loadDump dump rams
-   loadSpriteDump rams
 
    Repeat nTicksPartial $ do
 
@@ -63,7 +60,7 @@ theVideoSystem = do
     -- u_rams
     rams_data_out <-
       --ReadRam vram (bits [b0] & (i_ab `slice` (9,0))) -- BUG#6, hacked vram read addr was wrong
-      ReadRam ram i_ab
+      ReadRom ram i_ab
 
     -- sometimes it can be the cpu_data out, but we're not modelling the cpu here
     let sync_bus_db = rams_data_out
@@ -80,32 +77,6 @@ theVideoSystem = do
       pacman_video sprite_ram roms rams registers inputs
 
     drivePixel inputs outputs
-
-
-loadDump :: RomId -> Rams -> Eff () -- TODO: dev idea. read direct from dump
-loadDump dump Rams{ram} = do
-  sequence_ [ do
-                b <- ReadRomByte dump (eSized 11 i)
-                --let b = eSized 8 1 -- pick a specific tile for debug
-                WriteRam ram (eSized 11 i) b
-            | i <- [0..2047]]
-
-
-loadSpriteDump :: Rams -> Eff ()
-loadSpriteDump Rams{ram,sprite_xy_ram} = do
-  sequence_ [ do WriteRam ram (eSized 12 i) (eSized 8 b)
-            | (i,b) <- zip [infoBaseAddr..] info
-            ]
-  sequence_ [ do WriteRam sprite_xy_ram (eSized 4 i) (eSized 8 b)
-            | (i,b) <- zip [0..] xys
-            ]
-  where
-    infoBaseAddr = 4096 - 16
-    info = [ 0x00, 0x00, 0x94, 0x01, 0x94, 0x03, 0x8c, 0x05
-           , 0x8c, 0x07, 0xb8, 0x09, 0xfc, 0x00, 0x00, 0x00 ]
-
-    xys = [ 0x00, 0x00, 0xb6, 0x8c, 0xa1, 0xa4, 0x97, 0x8e
-          , 0x77, 0x8e, 0xa3, 0x2c, 0x07, 0x08, 0x00, 0x00 ]
 
 
 {-
@@ -300,14 +271,16 @@ withRoms f = do
       declareRom path size f = do DeclareRom (RomSpec { path, size }) $ f
 
 data Rams = Rams
-  { sprite_xy_ram :: RamId
-  , ram :: RamId
+  { sprite_xy_ram :: RomId --RamId
+  , ram :: RomId -- RamId
   }
 
 withRams :: (Rams -> System) -> System
 withRams f = do
-  DeclareRam 16 $ \sprite_xy_ram -> do
-  DeclareRam 4096 $ \ram -> do
+  --DeclareRam 16 $ \sprite_xy_ram -> do
+  --DeclareRam 4096 $ \ram -> do
+  DeclareRom (RomSpec { path = "xy.dump", size = 16 }) $ \sprite_xy_ram -> do
+  DeclareRom (RomSpec { path = "ram.dump", size = 4096 }) $ \ram -> do
   f Rams { sprite_xy_ram, ram }
 
 data Registers = Registers
@@ -405,7 +378,7 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
   -- BUG#5, read from sprite_xy_ram should be registered
   -- sprite_xy_ram
   do
-    dpo <- ReadRam sprite_xy_ram (i_ab `slice` (3,0))
+    dpo <- ReadRom sprite_xy_ram (i_ab `slice` (3,0))
     sprite_xy_ram_temp <= dpo
 
   -- p_sprite_ram_comb
@@ -455,11 +428,11 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- char roms
   char_rom_5e_dout :: E B8 <- do
-    read <- ReadRomByte char_rom_5e ca
+    read <- ReadRom char_rom_5e ca
     Mux ena_6 YN{ yes = read, no = byte0 }
 
   char_rom_5f_dout :: E B8 <- do
-    read <- ReadRomByte char_rom_5f ca
+    read <- ReadRom char_rom_5f ca
     Mux ena_6 YN{ yes = read, no = byte0 }
 
   -- p_char_data_mux
@@ -513,7 +486,7 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- col_rom_4a
   lut_4a <- do
-    ReadRomByte col_rom_4a col_rom_addr
+    ReadRom col_rom_4a col_rom_addr
 
   -- p_cntr_ld
   cntr_ld <- do
@@ -661,7 +634,7 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- col_rom_7f
   lut_7f :: E B8 <- do
-    ReadRomByte col_rom_7f final_col
+    ReadRom col_rom_7f final_col
 
   do --p_final_reg
     if_ ena_6 $ do
