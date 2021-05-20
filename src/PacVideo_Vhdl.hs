@@ -10,10 +10,10 @@ import Value
 ----------------------------------------------------------------------
 -- | system connect: 'pacman.vhd'
 
-theVideoSystem :: System
-theVideoSystem = do
+theVideoSystem :: String -> System
+theVideoSystem suf = do
   withRoms $ \roms -> do
-  withRams $ \rams@Rams{ram} -> do
+  withRams suf $ \rams@Rams{ram} -> do
   withRegisters $ \registers -> do
   withVideoTimingRegs $ \vtRegs -> do
 
@@ -275,12 +275,12 @@ data Rams = Rams
   , ram :: RomId -- RamId
   }
 
-withRams :: (Rams -> System) -> System
-withRams f = do
+withRams :: String -> (Rams -> System) -> System
+withRams suf f = do
   --DeclareRam 16 $ \sprite_xy_ram -> do
   --DeclareRam 4096 $ \ram -> do
-  DeclareRom (RomSpec { path = "xy.dump", size = 16 }) $ \sprite_xy_ram -> do
-  DeclareRom (RomSpec { path = "ram.dump", size = 4096 }) $ \ram -> do
+  DeclareRom (RomSpec { path = "dumps/xy."++suf, size = 16 }) $ \sprite_xy_ram -> do
+  DeclareRom (RomSpec { path = "dumps/ram."++suf, size = 4096 }) $ \ram -> do
   f Rams { sprite_xy_ram, ram }
 
 data Registers = Registers

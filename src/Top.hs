@@ -31,8 +31,12 @@ examples = Map.fromList
   [ ("cols"      , SmallExamples.cols)
   , ("square"    , SmallExamples.square)
   , ("tiles"     , DisplayRomGraphics.tiles)
-  , ("screen"    , DisplayRomGraphics.screen)
-  , ("vhdl"      , PacVideo_Vhdl.theVideoSystem)
+  , ("screen"    , DisplayRomGraphics.screen "dump")
+  , ("screen1"   , DisplayRomGraphics.screen "dump1")
+  , ("screen2"   , DisplayRomGraphics.screen "dump2")
+  , ("vhdl"      , PacVideo_Vhdl.theVideoSystem "dump")
+  , ("vhdl1"     , PacVideo_Vhdl.theVideoSystem "dump1")
+  , ("vhdl2"     , PacVideo_Vhdl.theVideoSystem "dump2")
   ]
 
 parseArgs :: [String] -> Mode

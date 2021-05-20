@@ -6,7 +6,7 @@ import System
 import Value
 
 tiles :: System
-tiles = withMac $ \mac -> do
+tiles = withMac "dump" $ \mac -> do
   let ss = defaultScreenSpec { sf = 2, size = XY { x = 330, y = 256 } }
   FrameEffect ss $ do
     seeCols mac
@@ -14,8 +14,8 @@ tiles = withMac $ \mac -> do
     seeTiles mac
     seeSprites mac
 
-screen :: System
-screen = withMac $ \mac -> do
+screen :: String -> System
+screen suf = withMac suf $ \mac -> do
   let (x,y) = (256,288) -- bug in X! --(224,288) == (8*28, 8*36)
   let ss = defaultScreenSpec { sf = 2, size = XY { x, y }}
   FrameEffect ss $ do
@@ -23,14 +23,14 @@ screen = withMac $ \mac -> do
     sequence_ [drawSpriteIndex mac i | i <- [0..7]]
     pure ()
 
-withMac :: (Mac -> System) -> System
-withMac f =
+withMac :: String -> (Mac -> System) -> System
+withMac suf f =
   DeclareRom (RomSpec { path = "roms/82s123.7f", size = 32 }) $ \colRom -> do
   DeclareRom (RomSpec { path = "roms/82s126.4a", size = 256 }) $ \palRom -> do
   DeclareRom (RomSpec { path = "roms/pacman.5e", size = 4096 }) $ \tileRom -> do
   DeclareRom (RomSpec { path = "roms/pacman.5f", size = 4096 }) $ \spriteRom -> do
-  DeclareRom (RomSpec { path = "ram.dump", size = 4096 }) $ \ramDump -> do
-  DeclareRom (RomSpec { path = "xy.dump", size = 16 }) $ \xyDump -> do
+  DeclareRom (RomSpec { path = "dumps/ram."++suf, size = 4096 }) $ \ramDump -> do
+  DeclareRom (RomSpec { path = "dumps/xy."++suf, size = 16 }) $ \xyDump -> do
   f (Mac { colRom, palRom, tileRom, spriteRom, ramDump, xyDump})
 
 data Mac = Mac
