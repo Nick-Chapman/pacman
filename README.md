@@ -14,3 +14,4 @@ Pacman (Z80) Emulator in Haskell
 - [Justin-Credible's C# Emulator](https://www.justin-credible.net/2020/08/24/pac-man-emulator)
 - [Frisnit's Java Emulator](https://github.com/frisnit/pacman-emulator)
 - [VHDL simulation model](https://github.com/eshopper99/pacman)
+- [Annotated disassemble (Ms. Pac-Man)](https://github.com/BleuLlama/GameDocs/blob/master/disassemble/mspac.asm)
