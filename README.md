@@ -13,3 +13,4 @@ Pacman (Z80) Emulator in Haskell
 - [Superzazu's C99 Emulator](https://github.com/superzazu/pac)
 - [Justin-Credible's C# Emulator](https://www.justin-credible.net/2020/08/24/pac-man-emulator)
 - [Frisnit's Java Emulator](https://github.com/frisnit/pacman-emulator)
+- [VHDL simulation model](https://github.com/eshopper99/pacman)
