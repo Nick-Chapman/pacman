@@ -26,8 +26,8 @@ data World = World
   , accNanos :: Int64
   }
 
-main :: Code -> Bool -> IO ()
-main code accpix = do
+main :: String -> Code -> Bool -> IO ()
+main name code accpix = do
   (ss,context,state,prog) <- Code.initialize code
   let! _ = keyMapTable
   SDL.initializeAll
@@ -37,7 +37,7 @@ main code accpix = do
 
   let windowSize = V2 (fi sf * (2*offset + fi screenW)) (fi sf * (2*offset + fi screenH))
   let winConfig = SDL.defaultWindow { SDL.windowInitialSize = windowSize }
-  win <- SDL.createWindow (Text.pack "PacMan") $ winConfig
+  win <- SDL.createWindow (Text.pack $ "PacMan("++name++")") $ winConfig
   renderer <- SDL.createRenderer win (-1) SDL.defaultRenderer
   let assets = DrawAssets { renderer, ss, offset, accpix }
   let keys = Keys { pressed = Set.empty }
@@ -50,6 +50,7 @@ main code accpix = do
         x <- Code.runForOneFrame prog context state keys
         let (picture,state) = x `deepseq` x
         drawEverything assets picture
+        generateFile (name++"-frame-"++show frame++".txt") (PixelsOf picture)
         pure state
 
       events <- SDL.pollEvents
@@ -187,3 +188,22 @@ setColor r c = SDL.rendererDrawColor r $= fromRGB c
   where
     fi = fromIntegral
     fromRGB RGB {r,g,b} = V4 (fi r) (fi g) (fi b) 255
+
+
+generateFile :: Show a => String -> a -> IO ()
+generateFile tag a = do
+  let str = show a
+  let nlines = length [ () | '\n' <- str ]
+  let fp :: FilePath = "gen/" ++ tag ++ ".out"
+  putStrLn $ "Writing file: " <> fp <> " (" ++ show nlines ++ " lines)"
+  writeFile fp str
+
+newtype PixelsOf = PixelsOf { picture :: Picture }
+
+instance Show PixelsOf where
+  show = unlines . map show . flat . picture
+    where
+      flat :: Picture -> [(XY Int,RGB Int)]
+      flat = \case
+        Draw xy rgb -> [(xy,rgb)]
+        Pictures xs -> xs >>= flat

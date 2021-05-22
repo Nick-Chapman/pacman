@@ -68,7 +68,7 @@ run Conf{name,system,pic,accpix,specializeRoms} = do
   putStrLn "*rethinking emulation types*"
   code <- System.elaborate System.Conf { specializeRoms } system
   generateFile name code
-  if pic then EmulateWithSdl.main code accpix
+  if pic then EmulateWithSdl.main name code accpix
   else OneFrame.main name code
 
 generateFile :: Show a => String -> a -> IO ()

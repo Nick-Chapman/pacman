@@ -284,6 +284,7 @@ data Registers = Registers
   , lut_4a_t1 :: Reg B8
   , char_rom_5e_dout :: Reg B8
   , char_rom_5f_dout :: Reg B8
+  , sprite_ram_reg :: Reg B4
   }
 
 withRegisters :: (Registers -> System) -> System
@@ -307,6 +308,7 @@ withRegisters f = do
   DeclareReg "lut_4a_t1" (Size 8) $ \lut_4a_t1 -> do
   DeclareReg "char_rom_5e_dout" (Size 8) $ \char_rom_5e_dout -> do
   DeclareReg "char_rom_5f_dout" (Size 8) $ \char_rom_5f_dout -> do
+  DeclareReg "sprite_ram_reg" (Size 4) $ \sprite_ram_reg -> do
 
     f Registers
       { char_sum_reg
@@ -328,6 +330,7 @@ withRegisters f = do
       , lut_4a_t1
       , char_rom_5e_dout
       , char_rom_5f_dout
+      , sprite_ram_reg
       }
 
 ----------------------------------------------------------------------
@@ -356,6 +359,7 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
   lut_4a_t1' <- GetReg lut_4a_t1
   char_rom_5e_dout' <- GetReg char_rom_5e_dout
   char_rom_5f_dout' <- GetReg char_rom_5f_dout
+  sprite_ram_reg' <- GetReg sprite_ram_reg
 
   -- Seems the write into the sprit ram comes via here; let's ignore that
   -- sprite_xy_ram_wen :: E Bit <- not i_wr2_l `and` ena_6
@@ -497,13 +501,13 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
     pure $ byte `slice` (3,0)
 
   -- p_sprite_ram_op_comb
-  -- TODO: sprite_ram_reg is not registered. is that ok?
-  sprite_ram_reg :: E B4 <- do
-    Mux vout_obj_on_t1' YN { yes = sprite_ram_op, no = nibble0 }
+  do
+    v <- Mux vout_obj_on_t1' YN { yes = sprite_ram_op, no = nibble0 }
+    sprite_ram_reg <= v -- BUG #8 -- wasn't registered; sometimes caused bar at bottom of pink ghost
 
   -- p_video_op_sel_comb
   video_op_sel :: E Bit <- do
-    not <$> (sprite_ram_reg `isV` [B0,B0,B0,B0])
+    not <$> (sprite_ram_reg' `isV` [B0,B0,B0,B0])
 
   do -- p_sprite_ram_ip_reg
     if_ ena_6 $ do
@@ -514,7 +518,7 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
 
   -- p_sprite_ram_ip_comb
   sprite_ram_ip :: E B4 <- do
-    yes <- Mux video_op_sel YN { yes = sprite_ram_reg
+    yes <- Mux video_op_sel YN { yes = sprite_ram_reg'
                                , no = lut_4a_t1' `slice` (3,0) }
     Mux vout_hblank_t1' YN { yes, no = nibble0 }
 
@@ -527,7 +531,7 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
   -- p_video_op_comb
   final_col :: E B4 <- do
     cond <- vout_hblank' `or` i_vblank
-    v <- Mux video_op_sel YN { yes = sprite_ram_reg
+    v <- Mux video_op_sel YN { yes = sprite_ram_reg'
                              , no = lut_4a `slice` (3,0) }
     Mux cond YN { yes = nibble0, no = v }
 
