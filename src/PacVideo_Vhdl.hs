@@ -79,28 +79,8 @@ theVideoSystem suf = do
     drivePixel inputs outputs
 
 
-{-
-  Display is rotated 90 degrees, so:
-    vcnt, maps to the X position on the screen (flipped)
-    hcnt, maps to the Y position on the screen
-
-X: vcnt (9 bits), varies more slowly
-  runs:   248 (0x0F8) .. 511 (0x1FF) -- 264 ticks
-  vblank: 495 (0x1EF) .. 271 (0x10F) --  40 ticks
-
-  pixels: 272..495 (#224)
-
-Y: hcnt (9 bits), varies more quickly
-  runs:   128 (0x080) .. 511 (0x1FF) -- 384 ticks
-  blank:  143 (0x08F) .. 239 (0x0EF) --  96 ticks
-
-  pixels: 128..143, 240..511 (#288)
--}
-
 drivePixel :: Inputs -> Outputs -> Eff ()
 drivePixel Inputs{i_vblank,i_hcnt,i_vcnt} Outputs{o_red,o_green,o_blue} = do
-
-  -- hblank seems off (by 8?) regarding which pixels to display ?!
 
   --let colByte = o_red & o_green & o_blue -- BUG#3
   let colByte = o_blue & o_green & o_red
@@ -110,16 +90,16 @@ drivePixel Inputs{i_vblank,i_hcnt,i_vcnt} Outputs{o_red,o_green,o_blue} = do
 
   if_ (not i_vblank) $ do
 
-    partA <- Less i_hcnt (eSized 9 152) -- 128..151 (24)
-    partB <- Less (eSized 9 247) i_hcnt -- 248..511 (264)
+    partA <- Less i_hcnt (eSized 9 153) -- 128..152 (25)
+    partB <- Less (eSized 9 248) i_hcnt -- 249..511 (263)
 
     if_ partA $ do
-      y <- Plus i_hcnt (eSized 9 136) -- 128..151 --> 264..287
+      y <- Plus i_hcnt (eSized 9 135) -- 128..152 --> 263..287
       let xy = XY { x, y }
       SetPixel xy rgb
 
     if_ partB $ do
-      y <- Minus i_hcnt (eSized 9 248) -- 248..511 --> 0..263
+      y <- Minus i_hcnt (eSized 9 249) -- 249..511 --> 0..262
       let xy = XY { x, y }
       SetPixel xy rgb
 
