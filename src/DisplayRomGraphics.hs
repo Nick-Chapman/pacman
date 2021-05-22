@@ -16,7 +16,7 @@ tiles = withMac "dump" $ \mac -> do
 
 screen :: String -> System
 screen suf = withMac suf $ \mac -> do
-  let (x,y) = (256,288) -- bug in X! --(224,288) == (8*28, 8*36)
+  let (x,y) = (224,288) -- (8*28, 8*36)
   let ss = defaultScreenSpec { sf = 3, size = XY { x, y }}
   FrameEffect ss $ do
     drawTiles mac
@@ -142,9 +142,20 @@ drawSprite xy sprite palette = do
                   ]
   sequence_ [ do
                 rgb <- resolvePaletteItemIndex palette pii
-                SetPixel xy rgb
+                transparent <- isBlack rgb
+                Ite transparent $ \case
+                  B1 -> pure ()
+                  B0 -> SetPixel xy rgb
             | (xy,pii) <- zip xys piis
             ]
+
+isBlack :: RGB (E Nat) -> Eff (E Bit)
+isBlack RGB{r,g,b} = do
+  rz <- IsZero r
+  gz <- IsZero g
+  bz <- IsZero b
+  rgz <- And rz gz
+  And rgz bz
 
 drawTiles :: Mac -> Eff ()
 drawTiles mac = do
