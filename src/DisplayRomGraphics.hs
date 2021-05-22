@@ -99,7 +99,7 @@ seeSprites mac = do
         let i = 8*y + x
         let xy = XY { x = nat9 (xoff + 20*x), y = nat9 (yoff + 20*y) }
         sprite <- readSprite mac (SI (nat8 i))
-        drawSprite xy sprite palette
+        drawSprite (b0,b0) xy sprite palette
     |
       x <- [0..7]
     , y <- [0..7]
@@ -119,8 +119,8 @@ drawSpriteIndex mac@Mac{ramDump,xyDump} i = do
   xLoc <- ReadRom xyDump (eSized 4 (0 + 2 * fromIntegral i))
   yLoc <- ReadRom xyDump (eSized 4 (1 + 2 * fromIntegral i))
   palette <- readPalette mac (PaletteIndex (mod64 palb))
-  let _yFlip = info `index` 0
-  let _xFlip = info `index` 1
+  let yFlip = info `index` 0
+  let xFlip = info `index` 1
   let spriteIndex = div4 info
   sprite <- readSprite mac (SI spriteIndex)
   let xMax = eSized 9 (28*8 + 15)
@@ -128,16 +128,19 @@ drawSpriteIndex mac@Mac{ramDump,xyDump} i = do
   x <- Minus xMax xLoc
   y <- Minus yMax yLoc
   let xy = XY { x, y }
-  drawSprite xy sprite palette
+  drawSprite (xFlip,yFlip) xy sprite palette
 
 div4 :: E Nat -> E Nat
 div4 i = combine (reverse (drop 2 (reverse (split i))))
 
 
-drawSprite :: XY (E Nat) -> Sprite -> Palette -> Eff ()
-drawSprite xy sprite palette = do
-  let (Sprite piis) = sprite --if xFlip||yFlip then sprite else sprite -- TODO flip!
-  xys <- sequence [ addXY xy (XY { x = nat8 xd, y = nat8 yd })
+drawSprite :: (E Bit, E Bit) -> XY (E Nat) -> Sprite -> Palette -> Eff ()
+drawSprite (xFlip,yFlip) xy sprite palette = do
+  let (Sprite piis) = sprite
+  xys <- sequence [ do
+                      x <- Mux xFlip YN { yes = nat8 (15-xd), no = nat8 xd }
+                      y <- Mux yFlip YN { yes = nat8 (15-yd), no = nat8 yd }
+                      addXY xy (XY { x, y })
                   | yd <- [0..15] , xd <- [0..15]
                   ]
   sequence_ [ do
