@@ -302,6 +302,8 @@ data Registers = Registers
   , vout_obj_on_t1 :: Reg Bit
   , vout_hblank_t1 :: Reg Bit
   , lut_4a_t1 :: Reg B8
+  , char_rom_5e_dout :: Reg B8
+  , char_rom_5f_dout :: Reg B8
   }
 
 withRegisters :: (Registers -> System) -> System
@@ -319,11 +321,12 @@ withRegisters f = do
   DeclareReg "vout_db" (Size 5) $ \vout_db -> do
   DeclareReg "ra" (Size 8) $ \ra -> do
   DeclareReg "video_out" (Size 8) $ \video_out -> do
-
   DeclareReg "sprite_ram_addr_t1" (Size 12) $ \sprite_ram_addr_t1 -> do
   DeclareReg1 "vout_obj_on_t1" $ \vout_obj_on_t1 -> do
   DeclareReg1 "vout_hblank_t1" $ \vout_hblank_t1 -> do
   DeclareReg "lut_4a_t1" (Size 8) $ \lut_4a_t1 -> do
+  DeclareReg "char_rom_5e_dout" (Size 8) $ \char_rom_5e_dout -> do
+  DeclareReg "char_rom_5f_dout" (Size 8) $ \char_rom_5f_dout -> do
 
     f Registers
       { char_sum_reg
@@ -339,11 +342,12 @@ withRegisters f = do
       , vout_db
       , ra
       , video_out
-
       , sprite_ram_addr_t1
       , vout_obj_on_t1
       , vout_hblank_t1
       , lut_4a_t1
+      , char_rom_5e_dout
+      , char_rom_5f_dout
       }
 
 ----------------------------------------------------------------------
@@ -366,11 +370,12 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
   vout_hblank' <- GetReg vout_hblank
   vout_obj_on' <- GetReg vout_obj_on
   vout_yflip' <- GetReg vout_yflip
-
   sprite_ram_addr_t1' <- GetReg sprite_ram_addr_t1
   vout_obj_on_t1' <- GetReg vout_obj_on_t1
   vout_hblank_t1' <- GetReg vout_hblank_t1
   lut_4a_t1' <- GetReg lut_4a_t1
+  char_rom_5e_dout' <- GetReg char_rom_5e_dout
+  char_rom_5f_dout' <- GetReg char_rom_5f_dout
 
   -- Seems the write into the sprit ram comes via here; let's ignore that
   -- sprite_xy_ram_wen :: E Bit <- not i_wr2_l `and` ena_6
@@ -427,18 +432,18 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
     pure (ca_11_6 & ca54 & bits [ca3,ca2,ca1,ca0])
 
   -- char roms
-  char_rom_5e_dout :: E B8 <- do
-    read <- ReadRom char_rom_5e ca
-    Mux ena_6 YN{ yes = read, no = byte0 }
+  do
+    if_ ena_6 $ do
+      read <- ReadRom char_rom_5e ca
+      char_rom_5e_dout <= read
 
-  char_rom_5f_dout :: E B8 <- do
-    read <- ReadRom char_rom_5f ca
-    Mux ena_6 YN{ yes = read, no = byte0 }
+      read <- ReadRom char_rom_5f ca
+      char_rom_5f_dout <= read
 
   -- p_char_data_mux
   cd :: E B8 <- do
-    Mux char_hblank_reg' YN { no = char_rom_5e_dout
-                            , yes = char_rom_5f_dout }
+    Mux char_hblank_reg' YN { no = char_rom_5e_dout'
+                            , yes = char_rom_5f_dout' }
 
   -- p_char_shift_comb
   (shift_sel,shift_op) <- do
@@ -498,10 +503,10 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
     if_ ena_6 $ do
       Ite cntr_ld $ \case
         B1 -> do
-          SetReg ra dr
+          ra <= dr
         B0 -> do
           ra1 <- Plus ra' byte1
-          SetReg ra ra1
+          ra <= ra1
 
   sprite_ram_addr :: E B12 <- do
     pure $ bits [b0,b0,b0,b0] & ra'
@@ -664,8 +669,7 @@ b0,b1 :: E Bit
 b0 = eLit 1 B0
 b1 = eLit 1 B1
 
-byte0, byte1 :: E Nat
-byte0 = eSized (Size 8) 0
+byte1 :: E Nat
 byte1 = eSized (Size 8) 1
 
 nibble0 :: E Nat
