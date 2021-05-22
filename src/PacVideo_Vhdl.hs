@@ -29,12 +29,12 @@ theVideoSystem suf = do
 
   -- we are currently too slow to display a full frame at once
   -- so instead we display n/264 of a frame, for a given value of n
-  let n = 10
+  let n = 264
   let nTicksPartial = hTicks * n
   let fi = fromIntegral
   let frameFraction :: Double = fi nTicksPartial / fi nTicksFull
 
-  let ss = defaultScreenSpec { sf = 2, size = XY { x, y }
+  let ss = defaultScreenSpec { sf = 3, size = XY { x, y }
                              , emuSecsPerFrame = 1.0 / 60 * frameFraction }
 
   FrameEffect ss $ do

@@ -7,7 +7,7 @@ import Value
 
 tiles :: System
 tiles = withMac "dump" $ \mac -> do
-  let ss = defaultScreenSpec { sf = 2, size = XY { x = 330, y = 256 } }
+  let ss = defaultScreenSpec { sf = 3, size = XY { x = 330, y = 256 } }
   FrameEffect ss $ do
     seeCols mac
     seePals mac
@@ -17,7 +17,7 @@ tiles = withMac "dump" $ \mac -> do
 screen :: String -> System
 screen suf = withMac suf $ \mac -> do
   let (x,y) = (256,288) -- bug in X! --(224,288) == (8*28, 8*36)
-  let ss = defaultScreenSpec { sf = 2, size = XY { x, y }}
+  let ss = defaultScreenSpec { sf = 3, size = XY { x, y }}
   FrameEffect ss $ do
     drawTiles mac
     sequence_ [drawSpriteIndex mac i | i <- [0..7]]

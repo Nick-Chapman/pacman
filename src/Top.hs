@@ -1,12 +1,12 @@
 module Top (main) where
 
-import Control.Monad (when)
 import Data.Map.Strict (Map)
 import System (System)
 import System.Environment (getArgs)
 import qualified Data.Map as Map
 import qualified DisplayRomGraphics (tiles,screen)
 import qualified EmulateWithSdl (main)
+import qualified OneFrame (main)
 import qualified PacVideo_Vhdl (theVideoSystem)
 import qualified SmallExamples (square,cols)
 import qualified System (Conf(..),elaborate)
@@ -54,7 +54,7 @@ parseArgs args = do
     loop :: Conf -> [String] -> Mode
     loop conf = \case
       [] -> Mode conf
-      "nopic":xs -> loop conf { pic = False } xs
+      "f1":xs -> loop conf { pic = False } xs
       "accpix":xs -> loop conf { accpix = True } xs
       "slow":xs -> loop conf { specializeRoms = False } xs
       "quick":xs -> loop conf { specializeRoms = True } xs
@@ -68,8 +68,8 @@ run Conf{name,system,pic,accpix,specializeRoms} = do
   putStrLn "*rethinking emulation types*"
   code <- System.elaborate System.Conf { specializeRoms } system
   generateFile name code
-  when pic $ EmulateWithSdl.main code accpix
-  pure ()
+  if pic then EmulateWithSdl.main code accpix
+  else OneFrame.main name code
 
 generateFile :: Show a => String -> a -> IO ()
 generateFile tag a = do
