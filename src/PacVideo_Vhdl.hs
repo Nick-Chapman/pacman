@@ -284,7 +284,7 @@ data Registers = Registers
   , lut_4a_t1 :: Reg B8
   , char_rom_5e_dout :: Reg B8
   , char_rom_5f_dout :: Reg B8
-  , sprite_ram_reg :: Reg B4
+--  , sprite_ram_reg :: Reg B4
   }
 
 withRegisters :: (Registers -> System) -> System
@@ -308,7 +308,7 @@ withRegisters f = do
   DeclareReg "lut_4a_t1" (Size 8) $ \lut_4a_t1 -> do
   DeclareReg "char_rom_5e_dout" (Size 8) $ \char_rom_5e_dout -> do
   DeclareReg "char_rom_5f_dout" (Size 8) $ \char_rom_5f_dout -> do
-  DeclareReg "sprite_ram_reg" (Size 4) $ \sprite_ram_reg -> do
+--  DeclareReg "sprite_ram_reg" (Size 4) $ \sprite_ram_reg -> do
 
     f Registers
       { char_sum_reg
@@ -330,7 +330,7 @@ withRegisters f = do
       , lut_4a_t1
       , char_rom_5e_dout
       , char_rom_5f_dout
-      , sprite_ram_reg
+--      , sprite_ram_reg
       }
 
 ----------------------------------------------------------------------
@@ -359,7 +359,7 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
   lut_4a_t1' <- GetReg lut_4a_t1
   char_rom_5e_dout' <- GetReg char_rom_5e_dout
   char_rom_5f_dout' <- GetReg char_rom_5f_dout
-  sprite_ram_reg' <- GetReg sprite_ram_reg
+  --sprite_ram_reg' <- GetReg sprite_ram_reg
 
   -- Seems the write into the sprit ram comes via here; let's ignore that
   -- sprite_xy_ram_wen :: E Bit <- not i_wr2_l `and` ena_6
@@ -501,9 +501,12 @@ pacman_video sprite_ram Roms{..} Rams{..} Registers{..} Inputs{..} = do
     pure $ byte `slice` (3,0)
 
   -- p_sprite_ram_op_comb
-  do
+  {-do
     v <- Mux vout_obj_on_t1' YN { yes = sprite_ram_op, no = nibble0 }
-    sprite_ram_reg <= v -- BUG #8 -- wasn't registered; sometimes caused bar at bottom of pink ghost
+    sprite_ram_reg <= v -- BUG #8 -- wasn't registered; sometimes caused bar at bottom of pink ghost -}
+  -- reinstate unregisterd sprite_ram_reg
+  sprite_ram_reg' :: E B4 <- do
+    Mux vout_obj_on_t1' YN { yes = sprite_ram_op, no = nibble0 }
 
   -- p_video_op_sel_comb
   video_op_sel :: E Bit <- do
