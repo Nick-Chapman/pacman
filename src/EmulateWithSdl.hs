@@ -57,10 +57,10 @@ main name code accpix = do
       let interesting = [ i | e <- events, i <- interestingOf e ]
       if Quit `elem` interesting then pure () else do --quit
       keys <- pure $ foldl insertInteresting keys interesting
-      let _ = threadDelay (1000000 `div` 60) -- 1/60 sec
+      threadDelay (1000000 `div` 60) -- 1/60 sec
 
       let world = World { state, keys, frame = frame+1, accNanos = accNanos + xNanos }
-      printStatLine ss world
+      let _ = printStatLine ss world
       loop world
 
   setColor renderer darkGrey

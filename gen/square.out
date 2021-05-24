@@ -7,7 +7,7 @@ let u2 : #1 = r1
 let u3 : #1 = !u1 & pressed(KeyEnter)
 r0 := pressed(KeyEnter)
 if (pressed(KeyX)) {
-  let u4 : #8 = u0 + #1'1
+  let u4 : #8 = u0 + #8'1
   r2#8 := u4
 } else {
 }
