@@ -1,13 +1,20 @@
 
-module DisplayTilesAndSprites (tiles) where
+module DisplayTilesAndSprites (
+  -- complete system
+  system,
+  -- used by Pacman_ScreenDecodeProgram
+  readPalette, PaletteIndex(..), Palette(..),
+  readSprite, SpriteIndex(..), Sprite(..), drawSprite,
+  readTile, TileIndex(..), Tile(..), drawTile,
+  ) where
 
 import Data.List (transpose)
 import Pacman_Roms (VideoRoms(..),withVideoRoms)
 import System
 import Value
 
-tiles :: System
-tiles = withVideoRoms $ \roms -> do
+system :: System
+system = withVideoRoms $ \roms -> do
   let ss = defaultScreenSpec { sf = 3, size = XY { x = 330, y = 256 } }
   FrameEffect ss $ do
     seeCols roms
@@ -51,8 +58,8 @@ seeTiles mac = do
         let yoff = 80
         let i = 16*y + x
         let xy = XY { x = nat8 (xoff + 10*x), y = nat9 (yoff + 10*y) }
-        tile <- readTile mac (TI (nat8 i))
-        drawTile1 xy tile palette
+        tile <- readTile mac (TileIndex (nat8 i))
+        drawTile xy tile palette
     |
       x <- [0..15]
     , y <- [0..15]
@@ -68,7 +75,7 @@ seeSprites mac = do
         let yoff = 80
         let i = 8*y + x
         let xy = XY { x = nat9 (xoff + 20*x), y = nat9 (yoff + 20*y) }
-        sprite <- readSprite mac (SI (nat8 i))
+        sprite <- readSprite mac (SpriteIndex (nat8 i))
         drawSprite (b0,b0) xy sprite palette
     |
       x <- [0..7]
@@ -108,8 +115,8 @@ isBlack RGB{r,g,b} = do
   And rgz bz
 
 -- draw a tile selected by index
-drawTile1 :: XY (E Nat) -> Tile -> Palette -> Eff ()
-drawTile1 xy tile palette = do
+drawTile :: XY (E Nat) -> Tile -> Palette -> Eff ()
+drawTile xy tile palette = do
   let (Tile piis) = tile
   xys <- sequence [ addXY xy (XY { x = nat8 xd, y = nat8 yd })
                   | yd <- [0..7] , xd <- [0..7]
@@ -126,11 +133,11 @@ addXY XY{x=x1,y=y1} XY{x=x2,y=y2} = do
   y <- Plus y1 y2
   pure $ XY {x,y}
 
-newtype SpriteIndex = SI (E Nat) -- 0..63
+newtype SpriteIndex = SpriteIndex (E Nat) -- 0..63
 data Sprite = Sprite [PaletteItemIndex] -- #256 (16x16) for each sprite pixel
 
 readSprite :: VideoRoms -> SpriteIndex -> Eff Sprite
-readSprite VideoRoms{char_rom_5f} (SI i) = do
+readSprite VideoRoms{char_rom_5f} (SpriteIndex i) = do
   let
     readStrip :: Int -> Eff [PaletteItemIndex]
     readStrip off = do
@@ -148,7 +155,7 @@ readSprite VideoRoms{char_rom_5f} (SI i) = do
 times64 :: E Nat -> E Nat
 times64 i = combine (split i ++ [b0,b0,b0,b0,b0,b0])
 
-newtype TileIndex = TI (E Nat) -- 0..255
+newtype TileIndex = TileIndex (E Nat) -- 0..255
 data Tile = Tile [PaletteItemIndex] -- #64 (8x8) for each tile pixel
 
 data PaletteItemIndex = PII { h :: E Bit, l :: E Bit }
@@ -168,7 +175,7 @@ muxRGB sel RGB{r=yr,g=yg,b=yb} RGB{r=nr,g=ng,b=nb} = do
   pure $ RGB { r, g, b }
 
 readTile :: VideoRoms -> TileIndex -> Eff Tile
-readTile VideoRoms{char_rom_5e} (TI i) = do
+readTile VideoRoms{char_rom_5e} (TileIndex i) = do
   let
     readStrip off = do
       let i16 = times16 i -- 16 bytes per tile
@@ -231,7 +238,7 @@ decodeAsRGB w = do
     bit :: Int -> Int -> Eff (E Nat)
     bit i v = do
       let c = w `index` i
-      Mux c (YN (nat8 v) (nat8 0))
+      Mux c YN { yes = nat8 v, no = nat8 0 }
   r <- do
     x <- bit 0 0x21
     y <- bit 1 0x47

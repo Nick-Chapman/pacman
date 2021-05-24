@@ -4,10 +4,10 @@ import Data.Map.Strict (Map)
 import System (System)
 import System.Environment (getArgs)
 import qualified Data.Map as Map
-import qualified DisplayRomGraphics (screen)
-import qualified DisplayTilesAndSprites (tiles)
+import qualified DisplayTilesAndSprites (system)
 import qualified EmulateWithSdl (main)
 import qualified MovingSquareExample (square)
+import qualified Pacman_ScreenDecodeProgram (screen)
 import qualified PacVideo_Vhdl (theVideoSystem)
 import qualified System (Conf(..),elaborate)
 
@@ -29,8 +29,8 @@ data Conf = Conf
 examples :: Map String System
 examples = Map.fromList
   [ ("square"    , MovingSquareExample.square)
-  , ("tiles"     , DisplayTilesAndSprites.tiles)
-  , ("screen"    , DisplayRomGraphics.screen "dump2")
+  , ("tiles"     , DisplayTilesAndSprites.system)
+  , ("screen"    , Pacman_ScreenDecodeProgram.screen "dump2")
   , ("vhdl"      , PacVideo_Vhdl.theVideoSystem "dump2")
   ]
 
