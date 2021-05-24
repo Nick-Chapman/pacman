@@ -1,3 +1,5 @@
+
+-- | Example system: Move a square on the screen; change colour; toggle position.
 module MovingSquareExample (square) where
 
 import System
