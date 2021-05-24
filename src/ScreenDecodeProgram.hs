@@ -4,7 +4,7 @@
 -- | Code for decoding/drawing sprites and tiles is accessed from DisplayTilesAndSprites
 -- | The screen image is composed of tiles and sprites, as specified by the memory dump.
 
-module Pacman_ScreenDecodeProgram (screen) where
+module ScreenDecodeProgram (screenByHand) where
 
 import DisplayTilesAndSprites (
   readPalette, PaletteIndex(..),
@@ -12,14 +12,14 @@ import DisplayTilesAndSprites (
   readTile, TileIndex(..), drawTile,
   )
 
-import Pacman_Roms (VideoRoms(..),withVideoRoms)
-import System
-import Value
+import Pacman_RomsAndRams (VideoRoms(..),withVideoRoms,RamDump(..),withRamDump)
+import System (System(..),Eff(..),E,eSized,index,combine,split)
+import Value (ScreenSpec(..),defaultScreenSpec,XY(..),Nat)
 
-screen :: String -> System
-screen suf = do
+screenByHand :: String -> System
+screenByHand suf = do
   withVideoRoms $ \roms -> do
-  withDump suf $ \dump -> do
+  withRamDump suf $ \dump -> do
     let (x,y) = (224,288) -- (8*28, 8*36)
     let ss = defaultScreenSpec { sf = 3, size = XY { x, y }}
     FrameEffect ss $ do
@@ -27,23 +27,12 @@ screen suf = do
       sequence_ [drawSpriteIndex dump roms i | i <- [0..7]]
       pure ()
 
-withDump :: String -> (Dump -> System) -> System
-withDump suf f =
-  DeclareRom (RomSpec { path = "dumps/ram."++suf, size = 4096 }) $ \ramDump -> do
-  DeclareRom (RomSpec { path = "dumps/xy."++suf, size = 16 }) $ \xyDump -> do
-  f (Dump { ramDump, xyDump })
-
-data Dump = Dump
-  { ramDump :: RomId
-  , xyDump :: RomId
-  }
-
-drawSpriteIndex :: Dump -> VideoRoms -> Int -> Eff ()
-drawSpriteIndex Dump{ramDump,xyDump} roms i = do
-  info <- ReadRom ramDump (eSized 12 (0xff0 + 2 * fromIntegral i))
-  palb <- ReadRom ramDump (eSized 12 (0xff1 + 2 * fromIntegral i))
-  xLoc <- ReadRom xyDump (eSized 4 (0 + 2 * fromIntegral i))
-  yLoc <- ReadRom xyDump (eSized 4 (1 + 2 * fromIntegral i))
+drawSpriteIndex :: RamDump -> VideoRoms -> Int -> Eff ()
+drawSpriteIndex RamDump{ram,sprite_xy_ram} roms i = do
+  info <- ReadRom ram (eSized 12 (0xff0 + 2 * fromIntegral i))
+  palb <- ReadRom ram (eSized 12 (0xff1 + 2 * fromIntegral i))
+  xLoc <- ReadRom sprite_xy_ram (eSized 4 (0 + 2 * fromIntegral i))
+  yLoc <- ReadRom sprite_xy_ram (eSized 4 (1 + 2 * fromIntegral i))
   palette <- readPalette roms (PaletteIndex (mod64 palb))
   let yFlip = info `index` 0
   let xFlip = info `index` 1
@@ -59,7 +48,7 @@ drawSpriteIndex Dump{ramDump,xyDump} roms i = do
 div4 :: E Nat -> E Nat
 div4 i = combine (reverse (drop 2 (reverse (split i))))
 
-drawTiles :: Dump -> VideoRoms -> Eff ()
+drawTiles :: RamDump -> VideoRoms -> Eff ()
 drawTiles dump roms = do
   let
     width = 28
@@ -77,11 +66,11 @@ drawTiles dump roms = do
   sequence_
     [ drawSelectedTile dump roms xy i | (xy,i::Int) <- top ++ mid ++ bot ]
 
-drawSelectedTile :: Dump -> VideoRoms -> XY Int -> Int -> Eff ()
-drawSelectedTile Dump{ramDump} roms xy i = do
-  byteT <- ReadRom ramDump (eSized 16 (fromIntegral i))
+drawSelectedTile :: RamDump -> VideoRoms -> XY Int -> Int -> Eff ()
+drawSelectedTile RamDump{ram} roms xy i = do
+  byteT <- ReadRom ram (eSized 16 (fromIntegral i))
   tile <- readTile roms (TileIndex byteT)
-  byteP <- ReadRom ramDump (eSized 16 (0x400 + fromIntegral i))
+  byteP <- ReadRom ram (eSized 16 (0x400 + fromIntegral i))
   let six = mod64 byteP
   let pi = PaletteIndex six
   palette <- readPalette roms pi

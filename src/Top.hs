@@ -10,8 +10,9 @@ import qualified Data.Map as Map
 import qualified DisplayTilesAndSprites (system)
 import qualified EmulateWithSdl (main)
 import qualified MovingSquareExample (square)
-import qualified Pacman_ScreenDecodeProgram (screen)
-import qualified PacVideo_Vhdl (theVideoSystem)
+import qualified ScreenDecodeProgram (screenByHand)
+import qualified ScreenDecodeHardware (vhdlSimulationModel)
+
 import qualified System (Conf(..),elaborate)
 
 main :: IO ()
@@ -33,8 +34,8 @@ examples :: Map String System
 examples = Map.fromList
   [ ("square"    , MovingSquareExample.square)
   , ("tiles"     , DisplayTilesAndSprites.system)
-  , ("screen"    , Pacman_ScreenDecodeProgram.screen "dump2")
-  , ("vhdl"      , PacVideo_Vhdl.theVideoSystem "dump2")
+  , ("screen"    , ScreenDecodeProgram.screenByHand "dump2")
+  , ("vhdl"      , ScreenDecodeHardware.vhdlSimulationModel "dump2")
   ]
 
 parseArgs :: [String] -> Mode

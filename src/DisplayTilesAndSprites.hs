@@ -5,14 +5,16 @@
 module DisplayTilesAndSprites (
   -- complete system
   system,
-  -- used by Pacman_ScreenDecodeProgram
+  -- used by ScreenDecodeProgram
   readPalette, PaletteIndex(..), Palette(..),
   readSprite, SpriteIndex(..), Sprite(..), drawSprite,
   readTile, TileIndex(..), Tile(..), drawTile,
+  -- used by ScreenDecodeHardware
+  decodeAsRGB
   ) where
 
 import Data.List (transpose)
-import Pacman_Roms (VideoRoms(..),withVideoRoms)
+import Pacman_RomsAndRams (VideoRoms(..),withVideoRoms)
 import System
 import Value
 

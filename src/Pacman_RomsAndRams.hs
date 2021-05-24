@@ -1,7 +1,10 @@
 
--- | Declare the video roms for a pacman system.
+-- | Declare the roms & rams for a pacman system.
 
-module Pacman_Roms (VideoRoms(..),withVideoRoms) where
+module Pacman_RomsAndRams (
+  VideoRoms(..), withVideoRoms,
+  RamDump(..), withRamDump,
+  ) where
 
 import System (System(DeclareRom),RomId,RomSpec(..))
 
@@ -21,3 +24,17 @@ withVideoRoms f = do
   f VideoRoms { col_rom_7f , col_rom_4a , char_rom_5e , char_rom_5f }
     where
       declareRom path size f = do DeclareRom (RomSpec { path, size }) $ f
+
+data RamDump = RamDump
+  { ram :: RomId -- RamId
+  , sprite_xy_ram :: RomId --RamId
+  }
+
+withRamDump :: String -> (RamDump -> System) -> System
+withRamDump suf f = do
+  --TODO: reinstate Ram, with explicit initialization from ram-dump
+  --DeclareRam 16 $ \sprite_xy_ram -> do
+  --DeclareRam 4096 $ \ram -> do
+  DeclareRom (RomSpec { path = "dumps/ram."++suf, size = 4096 }) $ \ram -> do
+  DeclareRom (RomSpec { path = "dumps/xy."++suf, size = 16 }) $ \sprite_xy_ram -> do
+  f RamDump { sprite_xy_ram, ram }
