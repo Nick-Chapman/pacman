@@ -6,7 +6,7 @@ import System
 import Value
 
 tiles :: System
-tiles = withMac "dump" $ \mac -> do
+tiles = withMac "dump2" $ \mac -> do
   let ss = defaultScreenSpec { sf = 3, size = XY { x = 330, y = 256 } }
   FrameEffect ss $ do
     seeCols mac

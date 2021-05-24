@@ -1,0 +1,228 @@
+rom rom106 : RomSpec {path = "dumps/ram.dump2", size = 4096}
+rom rom105 : RomSpec {path = "dumps/xy.dump2", size = 16}
+rom rom104 : RomSpec {path = "roms/pacman.5f", size = 4096}
+rom rom103 : RomSpec {path = "roms/pacman.5e", size = 4096}
+rom rom102 : RomSpec {path = "roms/82s126.4a", size = 256}
+rom rom101 : RomSpec {path = "roms/82s123.7f", size = 32}
+reg r22 : #1 // vblank
+reg r21 : #1 // hblank
+reg r20 : #9 // vcnt
+reg r19 : #9 // hcnt
+reg r18 : #8 // char_rom_5f_dout
+reg r17 : #8 // char_rom_5e_dout
+reg r16 : #8 // lut_4a_t1
+reg r15 : #1 // vout_hblank_t1
+reg r14 : #1 // vout_obj_on_t1
+reg r13 : #12 // sprite_ram_addr_t1
+reg r12 : #8 // video_out
+reg r11 : #8 // ra
+reg r10 : #5 // vout_db
+reg r9 : #1 // vout_hblank
+reg r8 : #1 // vout_yflip
+reg r7 : #1 // vout_obj_on
+reg r6 : #8 // sprite_xy_ram_temp
+reg r5 : #4 // shift_regu
+reg r4 : #4 // shift_regl
+reg r3 : #8 // db_reg
+reg r2 : #1 // char_hblank_reg
+reg r1 : #1 // char_match_reg
+reg r0 : #4 // char_sum_reg
+ram ram1 : #256
+repeat (101376) {
+  let u0 : #9 = r19
+  let u1 : #9 = r20
+  let u2 : #1 = r21
+  let u3 : #1 = r22
+  let u4 : #9 = r19
+  let u5 : #9 = r20
+  let u6 : #9 = u4 ^^ #9'AF
+  let u7 : #1 = isZero(u6)
+  let u8 : #1 = isZero({[!u4[8],!u4[7],!u4[6],!u4[5],!u4[4],!u4[3],!u4[2],!u4[1],!u4[0]]})
+  if (u8) {
+    r19#9 := #9'80
+  } else {
+    let u9 : #9 = u4 + #9'1
+    r19#9 := u9
+  }
+  let u10 : #1 = isZero({[!u5[8],!u5[7],!u5[6],!u5[5],!u5[4],!u5[3],!u5[2],!u5[1],!u5[0]]})
+  if (u7) {
+    if (u10) {
+      r20#9 := #9'F8
+    } else {
+      let u11 : #9 = u5 + #9'1
+      r20#9 := u11
+    }
+  } else {
+  }
+  let u12 : #9 = u4 ^^ #9'8F
+  let u13 : #1 = isZero(u12)
+  if (u13) {
+    r21 := 1
+  } else {
+    let u14 : #9 = u4 ^^ #9'EF
+    let u15 : #1 = isZero(u14)
+    if (u15) {
+      r21 := 0
+    } else {
+    }
+  }
+  if (u7) {
+    let u16 : #9 = u5 ^^ #9'1EF
+    let u17 : #1 = isZero(u16)
+    if (u17) {
+      r22 := 1
+    } else {
+      let u18 : #9 = u5 ^^ #9'10F
+      let u19 : #1 = isZero(u18)
+      if (u19) {
+        r22 := 0
+      } else {
+      }
+    }
+  } else {
+  }
+  let u20 : #1 = u0[5] ^ u0[4]
+  let u21 : #1 = u0[5] ^ u0[6]
+  let u22 : #1 = !u20 & !u21
+  let u23 : #4 = u22 ? {[0,u0[2],u0[6],u0[6]]} : #4'F
+  let u24 : #4 = u22 ? {[u0[6],u0[6],u0[3],u1[7]]} : #4'F
+  let u25 : #4 = u22 ? {[u1[6],u1[5],u1[4],u1[3]]} : {[u0[6],u0[5],u0[4],u0[2]]}
+  let u26 : #4 = u0[8] ? {[0,u0[2],u1[7],u1[6]]} : {[u23[3],u23[2],u23[1],u23[0]]}
+  let u27 : #4 = u0[8] ? {[u1[5],u1[4],u1[3],u0[7]]} : {[u24[3],u24[2],u24[1],u24[0]]}
+  let u28 : #4 = u0[8] ? {[u0[6],u0[5],u0[4],u0[3]]} : {[u25[3],u25[2],u25[1],u25[0]]}
+  let u29 : #8 = rom106[{[u26[3],u26[2],u26[1],u26[0],u27[3],u27[2],u27[1],u27[0],u28[3],u28[2],u28[1],u28[0]]}]
+  let u30 : #1 = r2
+  let u31 : #1 = r1
+  let u32 : #4 = r0
+  let u33 : #8 = r3
+  let u34 : #8 = r11
+  let u35 : #4 = r4
+  let u36 : #4 = r5
+  let u37 : #8 = r6
+  let u38 : #8 = r12
+  let u39 : #5 = r10
+  let u40 : #1 = r9
+  let u41 : #1 = r7
+  let u42 : #1 = r8
+  let u43 : #12 = r13
+  let u44 : #1 = r14
+  let u45 : #1 = r15
+  let u46 : #8 = r16
+  let u47 : #8 = r17
+  let u48 : #8 = r18
+  let u49 : #8 = rom105[{[u28[3],u28[2],u28[1],u28[0]]}]
+  let u50 : #8 = u2 ? {[!u37[7],!u37[6],!u37[5],!u37[4],!u37[3],!u37[2],!u37[1],!u37[0]]} : #8'FF
+  let u51 : #3 = {[u0[2],u0[1],u0[0]]} ^^ #3'3
+  let u52 : #1 = isZero(u51)
+  r6#8 := u49
+  if (u52) {
+    let u53 : #9 = {[u1[7],u1[6],u1[5],u1[4],u1[3],u1[2],u1[1],u1[0],1]} + {[u50[7],u50[6],u50[5],u50[4],u50[3],u50[2],u50[1],u50[0],!u2]}
+    let u54 : #4 = {[u53[8],u53[7],u53[6],u53[5]]} ^^ #4'F
+    let u55 : #1 = isZero(u54)
+    r1 := u55
+    r2 := u2
+    r0#4 := {[u53[4],u53[3],u53[2],u53[1]]}
+    r3#8 := u29
+  } else {
+  }
+  let u56 : #2 = u30 ? {[u33[1],u33[0]]} : #2'0
+  let u57 : #1 = !u31 & !u0[8]
+  let u58 : #1 = u32[3] ^ u56[1]
+  let u59 : #2 = !u30 ? {[u33[1],u33[0]]} : {[u58,u0[3]]}
+  let u60 : #1 = u0[2] ^ u56[0]
+  let u61 : #1 = u32[2] ^ u56[1]
+  let u62 : #1 = u32[1] ^ u56[1]
+  let u63 : #1 = u32[0] ^ u56[1]
+  let u64 : #8 = rom103[{[u33[7],u33[6],u33[5],u33[4],u33[3],u33[2],u59[1],u59[0],u60,u61,u62,u63]}]
+  let u65 : #8 = rom104[{[u33[7],u33[6],u33[5],u33[4],u33[3],u33[2],u59[1],u59[0],u60,u61,u62,u63]}]
+  let u66 : #8 = u30 ? u48 : u47
+  let u67 : #1 = u0[0] & u0[1]
+  let u68 : #2 = u42 ? {[u67,1]} : {[1,u67]}
+  let u69 : #2 = u42 ? {[u36[0],u35[0]]} : {[u36[3],u35[3]]}
+  r17#8 := u64
+  r18#8 := u65
+  if (u68[1]) {
+    if (u68[0]) {
+      r4#4 := {[u66[3],u66[2],u66[1],u66[0]]}
+      r5#4 := {[u66[7],u66[6],u66[5],u66[4]]}
+    } else {
+      r4#4 := {[u35[2],u35[1],u35[0],0]}
+      r5#4 := {[u36[2],u36[1],u36[0],0]}
+    }
+  } else {
+    if (u68[0]) {
+      r4#4 := {[0,u35[3],u35[2],u35[1]]}
+      r5#4 := {[0,u36[3],u36[2],u36[1]]}
+    } else {
+    }
+  }
+  let u70 : #3 = {[u0[2],u0[1],u0[0]]} ^^ #3'7
+  let u71 : #1 = isZero(u70)
+  if (u71) {
+    r7 := !u57
+    r8 := u56[0]
+    r9 := u2
+    r10#5 := {[u29[4],u29[3],u29[2],u29[1],u29[0]]}
+  } else {
+  }
+  let u72 : #8 = rom102[{[0,u39[4],u39[3],u39[2],u39[1],u39[0],u69[1],u69[0]]}]
+  let u73 : #4 = {[u0[3],u0[2],u0[1],u0[0]]} ^^ #4'7
+  let u74 : #1 = isZero(u73)
+  let u75 : #1 = !u40 & u41
+  let u76 : #1 = u74 & !u75
+  if (u76) {
+    r11#8 := u50
+  } else {
+    let u77 : #8 = u34 + #8'1
+    r11#8 := u77
+  }
+  let u78 : #8 = ram1[{[0,0,0,0,u34[7],u34[6],u34[5],u34[4],u34[3],u34[2],u34[1],u34[0]]}]
+  let u79 : #4 = u44 ? {[u78[3],u78[2],u78[1],u78[0]]} : #4'0
+  let u80 : #4 = u79 ^^ #4'0
+  let u81 : #1 = isZero(u80)
+  let u82 : #4 = !u81 ? u79 : {[u46[3],u46[2],u46[1],u46[0]]}
+  let u83 : #4 = u45 ? u82 : #4'0
+  r14 := u41
+  r15 := u40
+  r13#12 := {[0,0,0,0,u34[7],u34[6],u34[5],u34[4],u34[3],u34[2],u34[1],u34[0]]}
+  r16#8 := u72
+  if (u44) {
+    ram1[u43] := {[0,0,0,0,u83[3],u83[2],u83[1],u83[0]]}
+  } else {
+  }
+  let u84 : #1 = !u40 & !u3
+  let u85 : #4 = !u81 ? u79 : {[u72[3],u72[2],u72[1],u72[0]]}
+  let u86 : #4 = !u84 ? #4'0 : u85
+  let u87 : #8 = rom101[u86]
+  let u88 : #8 = u38[0] ? #8'21 : #8'0
+  let u89 : #8 = u38[1] ? #8'47 : #8'0
+  let u90 : #8 = u38[2] ? #8'97 : #8'0
+  let u91 : #8 = u88 + u89
+  let u92 : #8 = u91 + u90
+  let u93 : #8 = u38[3] ? #8'21 : #8'0
+  let u94 : #8 = u38[4] ? #8'47 : #8'0
+  let u95 : #8 = u38[5] ? #8'97 : #8'0
+  let u96 : #8 = u93 + u94
+  let u97 : #8 = u96 + u95
+  let u98 : #8 = u38[6] ? #8'51 : #8'0
+  let u99 : #8 = u38[7] ? #8'AE : #8'0
+  let u100 : #8 = u98 + u99
+  let u101 : #8 = u100 + #8'0
+  let u102 : #9 = #9'1EF - u1
+  r12#8 := u87
+  if (!u3) {
+    let u103 : #1 = u0 < #9'99
+    let u104 : #1 = #9'F8 < u0
+    if (u103) {
+      let u105 : #9 = u0 + #9'87
+      set-pixel (u102,u105) := RGB(u92,u97,u101)
+    } else {
+    }
+    if (u104) {
+      let u106 : #9 = u0 - #9'F9
+      set-pixel (u102,u106) := RGB(u92,u97,u101)
+    } else {
+    }
+  } else {
+  }
+}

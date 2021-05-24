@@ -6,9 +6,8 @@ import System.Environment (getArgs)
 import qualified Data.Map as Map
 import qualified DisplayRomGraphics (tiles,screen)
 import qualified EmulateWithSdl (main)
-import qualified OneFrame (main)
 import qualified PacVideo_Vhdl (theVideoSystem)
-import qualified SmallExamples (square,cols)
+import qualified SmallExamples (square)
 import qualified System (Conf(..),elaborate)
 
 main :: IO ()
@@ -28,20 +27,15 @@ data Conf = Conf
 
 examples :: Map String System
 examples = Map.fromList
-  [ ("cols"      , SmallExamples.cols)
-  , ("square"    , SmallExamples.square)
+  [ ("square"    , SmallExamples.square)
   , ("tiles"     , DisplayRomGraphics.tiles)
-  , ("screen"    , DisplayRomGraphics.screen "dump")
-  , ("screen1"   , DisplayRomGraphics.screen "dump1")
-  , ("screen2"   , DisplayRomGraphics.screen "dump2")
-  , ("vhdl"      , PacVideo_Vhdl.theVideoSystem "dump")
-  , ("vhdl1"     , PacVideo_Vhdl.theVideoSystem "dump1")
-  , ("vhdl2"     , PacVideo_Vhdl.theVideoSystem "dump2")
+  , ("screen"    , DisplayRomGraphics.screen "dump2")
+  , ("vhdl"      , PacVideo_Vhdl.theVideoSystem "dump2")
   ]
 
 parseArgs :: [String] -> Mode
 parseArgs args = do
-  let name = "cols" -- default
+  let name = "tiles" -- default
   let Just system = Map.lookup name examples
   loop Conf
     { name
@@ -69,7 +63,7 @@ run Conf{name,system,pic,accpix,specializeRoms} = do
   code <- System.elaborate System.Conf { specializeRoms } system
   generateFile name code
   if pic then EmulateWithSdl.main name code accpix
-  else OneFrame.main name code
+  else pure ()
 
 generateFile :: Show a => String -> a -> IO ()
 generateFile tag a = do

@@ -49,8 +49,8 @@ main name code accpix = do
       (state,xNanos) <- measureNanos $ do
         x <- Code.runForOneFrame prog context state keys
         let (picture,state) = x `deepseq` x
+        when (frame == 0) $ generateFile (name++"-frame") (PixelsOf picture)
         drawEverything assets picture
-        generateFile (name++"-frame-"++show frame++".txt") (PixelsOf picture)
         pure state
 
       events <- SDL.pollEvents

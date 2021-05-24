@@ -1,0 +1,97 @@
+reg r2 : #8 // xpos
+reg r1 : #1 // high
+reg r0 : #1 // last
+let u0 : #8 = r2
+let u1 : #1 = r0
+let u2 : #1 = r1
+let u3 : #1 = !u1 & pressed(KeyEnter)
+r0 := pressed(KeyEnter)
+if (pressed(KeyX)) {
+  let u4 : #8 = u0 + #1'1
+  r2#8 := u4
+} else {
+}
+if (u3) {
+  r1 := !u2
+} else {
+}
+let u5 : #8 = u2 ? u0 : u0
+let u6 : #8 = u2 ? #8'4B : #8'55
+let u7 : #8 = pressed(KeyShift) ? #8'0 : #8'FF
+let u8 : #8 = pressed(KeyShift) ? #8'FF : #8'0
+let u9 : #8 = pressed(KeyShift) ? #8'0 : #8'0
+let u10 : #8 = u5 + #8'0
+let u11 : #8 = u6 + #8'0
+set-pixel (u10,u11) := RGB(u7,u8,u9)
+let u12 : #8 = u5 + #8'0
+let u13 : #8 = u6 + #8'1
+set-pixel (u12,u13) := RGB(u7,u8,u9)
+let u14 : #8 = u5 + #8'0
+let u15 : #8 = u6 + #8'2
+set-pixel (u14,u15) := RGB(u7,u8,u9)
+let u16 : #8 = u5 + #8'0
+let u17 : #8 = u6 + #8'3
+set-pixel (u16,u17) := RGB(u7,u8,u9)
+let u18 : #8 = u5 + #8'0
+let u19 : #8 = u6 + #8'4
+set-pixel (u18,u19) := RGB(u7,u8,u9)
+let u20 : #8 = u5 + #8'1
+let u21 : #8 = u6 + #8'0
+set-pixel (u20,u21) := RGB(u7,u8,u9)
+let u22 : #8 = u5 + #8'1
+let u23 : #8 = u6 + #8'1
+set-pixel (u22,u23) := RGB(u7,u8,u9)
+let u24 : #8 = u5 + #8'1
+let u25 : #8 = u6 + #8'2
+set-pixel (u24,u25) := RGB(u7,u8,u9)
+let u26 : #8 = u5 + #8'1
+let u27 : #8 = u6 + #8'3
+set-pixel (u26,u27) := RGB(u7,u8,u9)
+let u28 : #8 = u5 + #8'1
+let u29 : #8 = u6 + #8'4
+set-pixel (u28,u29) := RGB(u7,u8,u9)
+let u30 : #8 = u5 + #8'2
+let u31 : #8 = u6 + #8'0
+set-pixel (u30,u31) := RGB(u7,u8,u9)
+let u32 : #8 = u5 + #8'2
+let u33 : #8 = u6 + #8'1
+set-pixel (u32,u33) := RGB(u7,u8,u9)
+let u34 : #8 = u5 + #8'2
+let u35 : #8 = u6 + #8'2
+set-pixel (u34,u35) := RGB(u7,u8,u9)
+let u36 : #8 = u5 + #8'2
+let u37 : #8 = u6 + #8'3
+set-pixel (u36,u37) := RGB(u7,u8,u9)
+let u38 : #8 = u5 + #8'2
+let u39 : #8 = u6 + #8'4
+set-pixel (u38,u39) := RGB(u7,u8,u9)
+let u40 : #8 = u5 + #8'3
+let u41 : #8 = u6 + #8'0
+set-pixel (u40,u41) := RGB(u7,u8,u9)
+let u42 : #8 = u5 + #8'3
+let u43 : #8 = u6 + #8'1
+set-pixel (u42,u43) := RGB(u7,u8,u9)
+let u44 : #8 = u5 + #8'3
+let u45 : #8 = u6 + #8'2
+set-pixel (u44,u45) := RGB(u7,u8,u9)
+let u46 : #8 = u5 + #8'3
+let u47 : #8 = u6 + #8'3
+set-pixel (u46,u47) := RGB(u7,u8,u9)
+let u48 : #8 = u5 + #8'3
+let u49 : #8 = u6 + #8'4
+set-pixel (u48,u49) := RGB(u7,u8,u9)
+let u50 : #8 = u5 + #8'4
+let u51 : #8 = u6 + #8'0
+set-pixel (u50,u51) := RGB(u7,u8,u9)
+let u52 : #8 = u5 + #8'4
+let u53 : #8 = u6 + #8'1
+set-pixel (u52,u53) := RGB(u7,u8,u9)
+let u54 : #8 = u5 + #8'4
+let u55 : #8 = u6 + #8'2
+set-pixel (u54,u55) := RGB(u7,u8,u9)
+let u56 : #8 = u5 + #8'4
+let u57 : #8 = u6 + #8'3
+set-pixel (u56,u57) := RGB(u7,u8,u9)
+let u58 : #8 = u5 + #8'4
+let u59 : #8 = u6 + #8'4
+set-pixel (u58,u59) := RGB(u7,u8,u9)
