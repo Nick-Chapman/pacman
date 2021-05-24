@@ -1,3 +1,7 @@
+
+-- | Definition of an _Emulation System_ which can be elaborated into _Emulation Code_.
+-- | Roms can be optionally specialized at elaboration time, or left for runtime.
+
 module System(
   System(..), Eff(..), Reg, RomId, RomSpec(..), RamId,
   Conf(..),elaborate,

@@ -1,4 +1,7 @@
 
+-- | A system for decoding & displaying pacman roms.
+-- | Also provides components which are reused by Pacman_ScreenDecodeProgram
+
 module DisplayTilesAndSprites (
   -- complete system
   system,

@@ -1,3 +1,6 @@
+
+-- | Use SDL to run _Emulation Code_ (obtained from elaborating an _Emulation System_)
+
 module EmulateWithSdl (main) where
 
 import Code (Code,State,Keys(..),Picture(..))

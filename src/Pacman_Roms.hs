@@ -1,4 +1,6 @@
 
+-- | Declare the video roms for a pacman system.
+
 module Pacman_Roms (VideoRoms(..),withVideoRoms) where
 
 import System (System(DeclareRom),RomId,RomSpec(..))

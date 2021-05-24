@@ -1,5 +1,10 @@
 
--- | Example system: Move a square on the screen; change colour; toggle position.
+-- | A small example system:
+-- | -- A red square is displayed on the screen.
+-- | -- The square moves right while the "X" key is pressed (and held).
+-- | -- The square is displayed green if the "Shift" key is pressed (and held).
+-- | -- Pressing "Return" toggles the y-postion between high & low.
+
 module MovingSquareExample (square) where
 
 import System
@@ -24,9 +29,9 @@ square = do
 moveSquare :: Int -> MS -> Eff ()
 moveSquare w MS{xposReg,enterLastReg,highReg}= do
 
-    let moveRight = keyDown KeyX -- move the square to the right
-    let beGreen = keyDown KeyShift -- change colour to green while pressed
-    let enter = keyDown KeyEnter -- toggle x-position as high/low
+    let moveRight = keyDown KeyX
+    let beGreen = keyDown KeyShift
+    let enter = keyDown KeyEnter
 
     xpos <- GetReg xposReg
     enterLast <- GetReg enterLastReg

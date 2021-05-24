@@ -1,3 +1,6 @@
+
+-- | Elaborate and run a system chosen by the command line.
+
 module Top (main) where
 
 import Data.Map.Strict (Map)

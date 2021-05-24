@@ -1,3 +1,7 @@
+
+-- | _Emulation Code_ derived by elaborating an _Emulation System_.
+-- Can be init/run by EmulateWithSdl, or exported.
+
 module Code (
   Code(..), Prog(..), Step(..), E(..), Oper(..), eNot,
   RegId, Reg(..), Tmp(..), TmpId(..), RegDec(..), RomId, RomSpec(..), RamId,

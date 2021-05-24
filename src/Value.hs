@@ -1,3 +1,6 @@
+
+-- | Values manipulated by Emulation Systems and Code.
+
 module Value (
   YN(..), XY(..), RGB(..), Key(..), Nat, Bit(..), Size(..), ScreenSpec(..),
   checkSize, isBit1, andBit, xorBit, notBit, indexBits,

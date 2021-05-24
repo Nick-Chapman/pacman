@@ -1,5 +1,9 @@
 
--- | System to decode pacman screen (hand written, following Lomont emulation guide)
+-- | System to decode a pacman screen from memory (hand written, following Lomont emulation guide)
+-- | The memory is loaded from 2-dump files (loaded as roms)
+-- | Code for decoding/drawing sprites and tiles is accessed from DisplayTilesAndSprites
+-- | The screen image is composed of tiles and sprites, as specified by the memory dump.
+
 module Pacman_ScreenDecodeProgram (screen) where
 
 import DisplayTilesAndSprites (
@@ -34,7 +38,6 @@ data Dump = Dump
   , xyDump :: RomId
   }
 
--- draw a sprite selected and positioned by the spriteInfo/spriteXY rams
 drawSpriteIndex :: Dump -> VideoRoms -> Int -> Eff ()
 drawSpriteIndex Dump{ramDump,xyDump} roms i = do
   info <- ReadRom ramDump (eSized 12 (0xff0 + 2 * fromIntegral i))
@@ -74,7 +77,6 @@ drawTiles dump roms = do
   sequence_
     [ drawSelectedTile dump roms xy i | (xy,i::Int) <- top ++ mid ++ bot ]
 
--- draw a tile selected by the vram
 drawSelectedTile :: Dump -> VideoRoms -> XY Int -> Int -> Eff ()
 drawSelectedTile Dump{ramDump} roms xy i = do
   byteT <- ReadRom ramDump (eSized 16 (fromIntegral i))
